@@ -55,7 +55,15 @@ const DEFAULT_SETTINGS: TeacherSettings = {
   role: 'thầy',
   teacherName: '',
   strictness: 'standard',
+  provider: 'claude',
   geminiApiKey: '',
+  geminiModel: 'gemini-3.8-flash',
+  claudeApiKey: '',
+  claudeModel: 'claude-3-7-sonnet-20250219',
+  claudeBaseUrl: 'https://api.anthropic.com/v1',
+  openaiApiKey: '',
+  openaiModel: 'gpt-4o',
+  openaiBaseUrl: 'https://api.openai.com/v1',
   model: 'gemini-3.8-flash',
 };
 
@@ -78,7 +86,16 @@ export default function Home() {
         if (parsed.model === 'gemini-2.5-flash') {
           parsed.model = 'gemini-3.8-flash';
         }
-        setSettings(parsed);
+        setSettings({
+          ...DEFAULT_SETTINGS,
+          ...parsed,
+          provider: parsed.provider || 'claude',
+          geminiModel: parsed.geminiModel || parsed.model || DEFAULT_SETTINGS.geminiModel,
+          claudeModel: parsed.claudeModel || DEFAULT_SETTINGS.claudeModel,
+          openaiModel: parsed.openaiModel || DEFAULT_SETTINGS.openaiModel,
+          claudeBaseUrl: parsed.claudeBaseUrl || DEFAULT_SETTINGS.claudeBaseUrl,
+          openaiBaseUrl: parsed.openaiBaseUrl || DEFAULT_SETTINGS.openaiBaseUrl,
+        });
       }
     } catch (e) {
       console.warn('Could not read settings from localStorage');

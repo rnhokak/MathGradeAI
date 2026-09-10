@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Sparkles, Settings, UserCheck, BookOpen, GraduationCap, Zap } from 'lucide-react';
+import { Sparkles, Settings, UserCheck, BookOpen, GraduationCap, Zap, Bot, Layers } from 'lucide-react';
 import { TeacherSettings } from '@/types/grading';
 
 interface HeaderProps {
@@ -61,9 +61,34 @@ export const Header: React.FC<HeaderProps> = ({
               <h1 style={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
                 MathGrade <span className="text-gradient">AI</span>
               </h1>
-              <span className="badge badge-indigo">
-                <Sparkles size={11} /> Next.js & Gemini
-              </span>
+              {settings.provider === 'claude' ? (
+                <span
+                  className="badge badge-amber"
+                  style={{ cursor: 'pointer' }}
+                  onClick={onOpenSettings}
+                  title="Bấm để cấu hình Claude API"
+                >
+                  <Bot size={11} /> {settings.claudeModel || 'Claude 3.7'}
+                </span>
+              ) : settings.provider === 'openai' ? (
+                <span
+                  className="badge badge-emerald"
+                  style={{ cursor: 'pointer' }}
+                  onClick={onOpenSettings}
+                  title="Bấm để cấu hình OpenAI API"
+                >
+                  <Layers size={11} /> {settings.openaiModel || 'GPT-4o'}
+                </span>
+              ) : (
+                <span
+                  className="badge badge-indigo"
+                  style={{ cursor: 'pointer' }}
+                  onClick={onOpenSettings}
+                  title="Bấm để cấu hình Gemini API"
+                >
+                  <Sparkles size={11} /> {settings.geminiModel || settings.model || 'Gemini 3.8'}
+                </span>
+              )}
             </div>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
               Chấm bài tự luận môn Toán & Lời phê sư phạm chuẩn mực

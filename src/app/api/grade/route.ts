@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
-import { RubricData, StudentSubmission, TeacherSettings, GradingResult } from '@/types/grading';
-import { buildGradingPrompt } from '@/utils/promptBuilder';
+import { RubricData, StudentSubmission, TeacherSettings } from '@/types/grading';
+import { gradeWithProvider } from '@/utils/aiGrading';
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,136 +22,85 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiKey = (
-      req.headers.get('x-gemini-api-key') ||
-      settings?.geminiApiKey ||
-      process.env.GEMINI_API_KEY ||
-      ''
-    ).trim();
+    const provider = settings?.provider || 'claude';
+    let apiKey = '';
 
-    // Must have a real Gemini API Key - NO MOCK FALLBACK
-    if (!apiKey) {
-      return NextResponse.json(
-        {
-          error:
-            'Chưa cấu hình Google Gemini API Key. Vui lòng bấm vào Cài Đặt (biểu tượng bánh răng) ở góc trên bên phải để nhập API Key, hoặc khai báo biến GEMINI_API_KEY trong file .env.local.',
-        },
-        { status: 400 }
-      );
-    }
+    if (provider === 'claude') {
+      apiKey = (
+        req.headers.get('x-claude-api-key') ||
+        settings?.claudeApiKey ||
+        process.env.ANTHROPIC_API_KEY ||
+        process.env.CLAUDE_API_KEY ||
+        ''
+      ).trim();
 
-    const ai = new GoogleGenAI({ apiKey });
-    const contents: any[] = [];
-
-    // 1. Add images (student handwriting / submission scans)
-    if (submission.images && submission.images.length > 0) {
-      for (const imgUrl of submission.images) {
-        const match = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
-        if (match) {
-          contents.push({
-            inlineData: {
-              mimeType: match[1],
-              data: match[2],
-            },
-          });
-        }
-      }
-    }
-
-    // 2. Add system instructions and prompt
-    const promptText = buildGradingPrompt(
-      rubric,
-      submission.studentName,
-      settings,
-      submission.extractedText
-    );
-    contents.push(promptText);
-
-    // Candidate models to withstand temporary spikes in demand (e.g. 503)
-    const userModel = settings?.model || process.env.GEMINI_MODEL || 'gemini-3.7-flash';
-    const cleanPreferred = userModel === 'gemini-2.5-flash' ? 'gemini-3.7-flash' : userModel;
-    const candidates = Array.from(new Set([cleanPreferred, 'gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-3.5-flash']));
-
-    let response: any = null;
-    let modelUsed = cleanPreferred;
-    let lastError: any = null;
-
-    for (const m of candidates) {
-      try {
-        response = await ai.models.generateContent({
-          model: m,
-          contents,
-          config: {
-            responseMimeType: 'application/json',
-            temperature: 0.1,
+      if (!apiKey) {
+        return NextResponse.json(
+          {
+            error:
+              'Chưa cấu hình Anthropic Claude API Key. Vui lòng bấm vào Cài Đặt (chọn tab Claude) để nhập API Key, hoặc khai báo ANTHROPIC_API_KEY trong file .env.local.',
           },
-        });
-        modelUsed = m;
-        break;
-      } catch (err: any) {
-        console.warn(`Model ${m} failed (${err.message || err}), trying next candidate...`);
-        lastError = err;
+          { status: 400 }
+        );
+      }
+    } else if (provider === 'openai') {
+      apiKey = (
+        req.headers.get('x-openai-api-key') ||
+        settings?.openaiApiKey ||
+        process.env.OPENAI_API_KEY ||
+        ''
+      ).trim();
+
+      if (!apiKey) {
+        return NextResponse.json(
+          {
+            error:
+              'Chưa cấu hình OpenAI / OpenAPI API Key. Vui lòng bấm vào Cài Đặt (chọn tab OpenAI) để nhập API Key, hoặc khai báo OPENAI_API_KEY trong file .env.local.',
+          },
+          { status: 400 }
+        );
+      }
+    } else {
+      // Gemini
+      apiKey = (
+        req.headers.get('x-gemini-api-key') ||
+        settings?.geminiApiKey ||
+        process.env.GEMINI_API_KEY ||
+        ''
+      ).trim();
+
+      if (!apiKey) {
+        return NextResponse.json(
+          {
+            error:
+              'Chưa cấu hình Google Gemini API Key. Vui lòng bấm vào Cài Đặt để nhập API Key, hoặc khai báo biến GEMINI_API_KEY trong file .env.local.',
+          },
+          { status: 400 }
+        );
       }
     }
 
-    if (!response) {
-      throw lastError || new Error('Không thể kết nối đến các mô hình Gemini AI.');
-    }
-
-    const textOutput = response.text || '';
-    const cleaned = textOutput.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-    
-    let parsedJson: any;
-    try {
-      parsedJson = JSON.parse(cleaned);
-    } catch (parseErr: any) {
-      console.error('Failed to parse Gemini output as JSON:', textOutput);
-      return NextResponse.json(
-        {
-          error:
-            'AI phản hồi định dạng không hợp lệ: ' +
-            (parseErr.message || parseErr) +
-            '. Phản hồi thô: ' +
-            textOutput.substring(0, 300),
-        },
-        { status: 500 }
-      );
-    }
-
-    const score = Number(parsedJson.score ?? 0);
-    const maxScore = Number(parsedJson.maxScore ?? rubric.totalPoints);
-    const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
-
-    const gradingResult: GradingResult = {
-      studentName: submission.studentName,
-      submissionId: submission.id,
-      score,
-      maxScore,
-      percentage,
-      status: 'completed',
-      gradedAt: new Date().toISOString(),
-      strengths: Array.isArray(parsedJson.strengths) ? parsedJson.strengths : [],
-      weaknesses: Array.isArray(parsedJson.weaknesses) ? parsedJson.weaknesses : [],
-      stepByStepAnalysis: parsedJson.stepByStepAnalysis || '',
-      criteriaBreakdown: Array.isArray(parsedJson.criteriaBreakdown) ? parsedJson.criteriaBreakdown : [],
-      correctionGuide: parsedJson.correctionGuide || '',
-      knowledgeToReview: Array.isArray(parsedJson.knowledgeToReview) ? parsedJson.knowledgeToReview : [],
-      teacherComment: parsedJson.teacherComment || '',
-    };
+    const { gradingResult, modelUsed } = await gradeWithProvider(
+      submission,
+      rubric,
+      settings,
+      apiKey
+    );
 
     return NextResponse.json({
       success: true,
       gradingResult,
-      mode: 'gemini-live',
+      mode: provider,
       modelUsed,
     });
   } catch (error: any) {
     console.error('Grading error:', error);
     return NextResponse.json(
       {
-        error: 'Lỗi trong quá trình chấm bài bằng Gemini AI: ' + (error.message || error),
+        error: error.message || 'Lỗi trong quá trình chấm bài bằng AI',
       },
       { status: 500 }
     );
   }
 }
+

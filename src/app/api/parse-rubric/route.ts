@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseDocx } from '@/utils/docxParser';
-import { parseRubricFromTablesAndText, parseRubricWithGemini } from '@/utils/rubricParser';
+import {
+  parseRubricFromTablesAndText,
+  parseRubricWithGemini,
+  parseRubricWithClaude,
+  parseRubricWithOpenAI,
+} from '@/utils/rubricParser';
 
 export async function POST(req: NextRequest) {
   try {
@@ -8,6 +13,9 @@ export async function POST(req: NextRequest) {
     let text = '';
     let tables: string[][][] = [];
     let fileName = 'Rubric';
+    let bodyProvider = '';
+    let bodyModel = '';
+    let bodyBaseUrl = '';
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
@@ -27,29 +35,83 @@ export async function POST(req: NextRequest) {
       text = body.text || '';
       tables = body.tables || [];
       fileName = body.fileName || 'Rubric';
+      bodyProvider = body.provider || '';
+      bodyModel = body.model || '';
+      bodyBaseUrl = body.baseUrl || '';
     }
 
-    const apiKey = (
-      req.headers.get('x-gemini-api-key') ||
-      process.env.GEMINI_API_KEY ||
-      ''
-    ).trim();
+    const provider = req.headers.get('x-ai-provider') || bodyProvider || 'claude';
 
-    const modelName = process.env.GEMINI_MODEL || 'gemini-3.7-flash';
+    // 1. Try AI parsing with selected provider
+    if (provider === 'claude') {
+      const claudeKey = (
+        req.headers.get('x-claude-api-key') ||
+        process.env.ANTHROPIC_API_KEY ||
+        process.env.CLAUDE_API_KEY ||
+        ''
+      ).trim();
+      const claudeModel = req.headers.get('x-claude-model') || bodyModel || process.env.CLAUDE_MODEL || 'claude-3-7-sonnet-20250219';
+      const claudeBaseUrl = req.headers.get('x-claude-base-url') || bodyBaseUrl || process.env.CLAUDE_BASE_URL || 'https://api.anthropic.com/v1';
 
-    // 1. Try Gemini AI parsing if API key is present
-    if (apiKey) {
-      try {
-        const aiRubric = await parseRubricWithGemini(text, tables, fileName, apiKey, modelName);
-        if (aiRubric.criteria && aiRubric.criteria.length > 0) {
-          return NextResponse.json({
-            success: true,
-            rubric: aiRubric,
-            mode: 'gemini',
-          });
+      if (claudeKey) {
+        try {
+          const aiRubric = await parseRubricWithClaude(text, tables, fileName, claudeKey, claudeModel, claudeBaseUrl);
+          if (aiRubric.criteria && aiRubric.criteria.length > 0) {
+            return NextResponse.json({
+              success: true,
+              rubric: aiRubric,
+              mode: 'claude',
+            });
+          }
+        } catch (aiErr: any) {
+          console.error('Claude rubric parsing failed, falling back to smart heuristic:', aiErr);
         }
-      } catch (aiErr: any) {
-        console.error('Gemini rubric parsing failed, falling back to smart heuristic:', aiErr);
+      }
+    } else if (provider === 'openai') {
+      const openaiKey = (
+        req.headers.get('x-openai-api-key') ||
+        process.env.OPENAI_API_KEY ||
+        ''
+      ).trim();
+      const openaiModel = req.headers.get('x-openai-model') || bodyModel || process.env.OPENAI_MODEL || 'gpt-4o';
+      const openaiBaseUrl = req.headers.get('x-openai-base-url') || bodyBaseUrl || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+
+      if (openaiKey) {
+        try {
+          const aiRubric = await parseRubricWithOpenAI(text, tables, fileName, openaiKey, openaiModel, openaiBaseUrl);
+          if (aiRubric.criteria && aiRubric.criteria.length > 0) {
+            return NextResponse.json({
+              success: true,
+              rubric: aiRubric,
+              mode: 'openai',
+            });
+          }
+        } catch (aiErr: any) {
+          console.error('OpenAI rubric parsing failed, falling back to smart heuristic:', aiErr);
+        }
+      }
+    } else {
+      // Gemini default
+      const geminiKey = (
+        req.headers.get('x-gemini-api-key') ||
+        process.env.GEMINI_API_KEY ||
+        ''
+      ).trim();
+      const geminiModel = req.headers.get('x-gemini-model') || bodyModel || process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+
+      if (geminiKey) {
+        try {
+          const aiRubric = await parseRubricWithGemini(text, tables, fileName, geminiKey, geminiModel);
+          if (aiRubric.criteria && aiRubric.criteria.length > 0) {
+            return NextResponse.json({
+              success: true,
+              rubric: aiRubric,
+              mode: 'gemini',
+            });
+          }
+        } catch (aiErr: any) {
+          console.error('Gemini rubric parsing failed, falling back to smart heuristic:', aiErr);
+        }
       }
     }
 
@@ -69,3 +131,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+

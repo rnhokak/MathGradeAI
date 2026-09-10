@@ -122,6 +122,8 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
         headers: {
           'Content-Type': 'application/json',
           ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
+          ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
+          ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
         },
         body: JSON.stringify({
           submission: sub,
@@ -216,15 +218,34 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
             </label>
 
             {submissions.length > 0 && (
-              <button
-                onClick={gradeAll}
-                disabled={isBatchGrading}
-                className="btn btn-emerald"
-                style={{ minWidth: '150px' }}
-              >
-                <Play size={16} />
-                {isBatchGrading ? 'Đang chấm...' : 'Chấm tất cả bài'}
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span
+                  className={`badge ${
+                    settings.provider === 'claude'
+                      ? 'badge-amber'
+                      : settings.provider === 'openai'
+                      ? 'badge-emerald'
+                      : 'badge-indigo'
+                  }`}
+                  style={{ fontSize: '0.78rem', padding: '6px 10px' }}
+                >
+                  AI:{' '}
+                  {settings.provider === 'claude'
+                    ? settings.claudeModel || 'Claude 3.7'
+                    : settings.provider === 'openai'
+                    ? settings.openaiModel || 'GPT-4o'
+                    : settings.geminiModel || settings.model || 'Gemini 3.8'}
+                </span>
+                <button
+                  onClick={gradeAll}
+                  disabled={isBatchGrading}
+                  className="btn btn-emerald"
+                  style={{ minWidth: '150px' }}
+                >
+                  <Play size={16} />
+                  {isBatchGrading ? 'Đang chấm...' : 'Chấm tất cả bài'}
+                </button>
+              </div>
             )}
           </div>
         </div>

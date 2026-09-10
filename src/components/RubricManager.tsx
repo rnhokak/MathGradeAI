@@ -41,10 +41,17 @@ export const RubricManager: React.FC<RubricManagerProps> = ({
       const formData = new FormData();
       formData.append('file', file);
 
-      const headers: Record<string, string> = {};
-      if (settings?.geminiApiKey) {
-        headers['x-gemini-api-key'] = settings.geminiApiKey;
-      }
+      const headers: Record<string, string> = {
+        'x-ai-provider': settings?.provider || 'claude',
+      };
+      if (settings?.geminiApiKey) headers['x-gemini-api-key'] = settings.geminiApiKey;
+      if (settings?.claudeApiKey) headers['x-claude-api-key'] = settings.claudeApiKey;
+      if (settings?.openaiApiKey) headers['x-openai-api-key'] = settings.openaiApiKey;
+      if (settings?.geminiModel) headers['x-gemini-model'] = settings.geminiModel;
+      if (settings?.claudeModel) headers['x-claude-model'] = settings.claudeModel;
+      if (settings?.openaiModel) headers['x-openai-model'] = settings.openaiModel;
+      if (settings?.claudeBaseUrl) headers['x-claude-base-url'] = settings.claudeBaseUrl;
+      if (settings?.openaiBaseUrl) headers['x-openai-base-url'] = settings.openaiBaseUrl;
 
       // Try the specialized /api/parse-rubric first (which auto-detects tables & AI)
       let rubricResult: RubricData | null = null;
@@ -86,7 +93,14 @@ export const RubricManager: React.FC<RubricManagerProps> = ({
 
       if (rubricResult) {
         onChangeRubric(rubricResult);
-        const modeText = usedMode === 'gemini' ? 'Gemini AI' : 'bộ nhận diện bảng thông minh';
+        const modeText =
+          usedMode === 'claude'
+            ? 'Claude AI'
+            : usedMode === 'openai'
+            ? 'OpenAI API'
+            : usedMode === 'gemini'
+            ? 'Gemini AI'
+            : 'bộ nhận diện bảng thông minh';
         showSuccess(
           `Đã tải và bóc tách thành công ${rubricResult.criteria.length} tiêu chí chấm (${rubricResult.totalPoints}đ) bằng ${modeText}!`
         );
@@ -115,12 +129,19 @@ export const RubricManager: React.FC<RubricManagerProps> = ({
     setUploadError(null);
 
     try {
+      const activeProvider = settings?.provider || 'claude';
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
+        'x-ai-provider': activeProvider,
       };
-      if (settings?.geminiApiKey) {
-        headers['x-gemini-api-key'] = settings.geminiApiKey;
-      }
+      if (settings?.geminiApiKey) headers['x-gemini-api-key'] = settings.geminiApiKey;
+      if (settings?.claudeApiKey) headers['x-claude-api-key'] = settings.claudeApiKey;
+      if (settings?.openaiApiKey) headers['x-openai-api-key'] = settings.openaiApiKey;
+      if (settings?.geminiModel) headers['x-gemini-model'] = settings.geminiModel;
+      if (settings?.claudeModel) headers['x-claude-model'] = settings.claudeModel;
+      if (settings?.openaiModel) headers['x-openai-model'] = settings.openaiModel;
+      if (settings?.claudeBaseUrl) headers['x-claude-base-url'] = settings.claudeBaseUrl;
+      if (settings?.openaiBaseUrl) headers['x-openai-base-url'] = settings.openaiBaseUrl;
 
       const res = await fetch('/api/parse-rubric', {
         method: 'POST',
@@ -128,6 +149,19 @@ export const RubricManager: React.FC<RubricManagerProps> = ({
         body: JSON.stringify({
           text: textToAnalyze,
           fileName: rubric.title,
+          provider: activeProvider,
+          model:
+            activeProvider === 'claude'
+              ? settings?.claudeModel
+              : activeProvider === 'openai'
+              ? settings?.openaiModel
+              : settings?.geminiModel,
+          baseUrl:
+            activeProvider === 'claude'
+              ? settings?.claudeBaseUrl
+              : activeProvider === 'openai'
+              ? settings?.openaiBaseUrl
+              : undefined,
         }),
       });
 

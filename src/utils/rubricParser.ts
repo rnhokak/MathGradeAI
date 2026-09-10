@@ -294,9 +294,23 @@ LƯU Ý:
     throw lastErr || new Error('Không thể phân tích rubric bằng Gemini AI');
   }
 
-  const rawJson = (response.text || '').replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-  const parsed = JSON.parse(rawJson);
+  let rawJson = (response.text || '').trim();
+  let parsed: any;
+  try {
+    parsed = JSON.parse(rawJson.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim());
+  } catch {
+    const match = rawJson.match(/\{[\s\S]*\}/);
+    if (match) {
+      parsed = JSON.parse(match[0]);
+    } else {
+      throw new Error('Không thể phân tích JSON rubric từ phản hồi Gemini');
+    }
+  }
 
+  return formatParsedRubric(parsed, fileName, text);
+}
+
+function formatParsedRubric(parsed: any, fileName: string, text: string): RubricData {
   const criteria: RubricCriterion[] = (parsed.criteria || []).map((c: any, idx: number) => ({
     id: c.id || `crit-${idx + 1}`,
     name: c.name || `Tiêu chí ${idx + 1}`,
@@ -316,3 +330,177 @@ LƯU Ý:
     rawText: text,
   };
 }
+
+/**
+ * Parses rubric using Anthropic Claude API
+ */
+export async function parseRubricWithClaude(
+  text: string,
+  tables: string[][][],
+  fileName: string,
+  apiKey: string,
+  modelName: string = 'claude-3-7-sonnet-20250219',
+  baseUrl: string = 'https://api.anthropic.com/v1'
+): Promise<RubricData> {
+  const tableSummary = tables
+    .map(
+      (t, idx) =>
+        `Bảng ${idx + 1}:\n` +
+        t.map((row) => '| ' + row.join(' | ') + ' |').join('\n')
+    )
+    .join('\n\n');
+
+  const prompt = `Bạn là chuyên gia khảo thí và chấm điểm tự động. Hãy phân tích văn bản và các bảng biểu từ file Word Rubric/Đáp án "${fileName}" dưới đây để tạo ra thang điểm Rubric có cấu trúc JSON chuẩn xác.
+
+Nội dung văn bản:
+"""
+${text.substring(0, 10000)}
+"""
+
+Nội dung bảng biểu trích xuất từ file:
+"""
+${tableSummary.substring(0, 10000)}
+"""
+
+HÃY TRẢ VỀ DUY NHẤT MỘT ĐỐI TƯỢNG JSON VỚI CẤU TRÚC:
+{
+  "title": "Tên câu hỏi hoặc bài thi (ví dụ: Câu 1. Giải phương trình logarit)",
+  "problemStatement": "Nội dung đầy đủ của câu hỏi / đề bài toán và đáp án chuẩn (giữ nguyên công thức toán dạng LaTeX $...$)",
+  "totalPoints": 1.0,
+  "criteria": [
+    {
+      "id": "crit-1",
+      "name": "Tên ngắn gọn của ý/bước giải",
+      "points": 0.25,
+      "description": "Yêu cầu chi tiết, điều kiện để cho điểm ý này"
+    }
+  ]
+}
+
+LƯU Ý:
+1. Không bỏ sót bất kỳ ý chấm nào trong bảng đáp án / biểu điểm.
+2. Tổng điểm "totalPoints" phải bằng tổng "points" của tất cả các tiêu chí trong "criteria".
+3. Chỉ trả về JSON hợp lệ, không giải thích thêm.`;
+
+  const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+  const response = await fetch(`${cleanBaseUrl}/messages`, {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: modelName,
+      max_tokens: 4096,
+      temperature: 0.1,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Claude API parse rubric error (${response.status}): ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const textOutput =
+    data.content?.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n') || '';
+
+  const cleanJson = textOutput.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleanJson);
+  } catch {
+    const match = cleanJson.match(/\{[\s\S]*\}/);
+    if (match) parsed = JSON.parse(match[0]);
+    else throw new Error('Không thể parse JSON từ Claude rubric');
+  }
+
+  return formatParsedRubric(parsed, fileName, text);
+}
+
+/**
+ * Parses rubric using OpenAI / OpenAPI-compatible API
+ */
+export async function parseRubricWithOpenAI(
+  text: string,
+  tables: string[][][],
+  fileName: string,
+  apiKey: string,
+  modelName: string = 'gpt-4o',
+  baseUrl: string = 'https://api.openai.com/v1'
+): Promise<RubricData> {
+  const tableSummary = tables
+    .map(
+      (t, idx) =>
+        `Bảng ${idx + 1}:\n` +
+        t.map((row) => '| ' + row.join(' | ') + ' |').join('\n')
+    )
+    .join('\n\n');
+
+  const prompt = `Bạn là chuyên gia khảo thí và chấm điểm tự động. Hãy phân tích văn bản và các bảng biểu từ file Word Rubric/Đáp án "${fileName}" dưới đây để tạo ra thang điểm Rubric có cấu trúc JSON chuẩn xác.
+
+Nội dung văn bản:
+"""
+${text.substring(0, 10000)}
+"""
+
+Nội dung bảng biểu trích xuất từ file:
+"""
+${tableSummary.substring(0, 10000)}
+"""
+
+HÃY TRẢ VỀ DUY NHẤT MỘT ĐỐI TƯỢNG JSON VỚI CẤU TRÚC:
+{
+  "title": "Tên câu hỏi hoặc bài thi (ví dụ: Câu 1. Giải phương trình logarit)",
+  "problemStatement": "Nội dung đầy đủ của câu hỏi / đề bài toán và đáp án chuẩn (giữ nguyên công thức toán dạng LaTeX $...$)",
+  "totalPoints": 1.0,
+  "criteria": [
+    {
+      "id": "crit-1",
+      "name": "Tên ngắn gọn của ý/bước giải",
+      "points": 0.25,
+      "description": "Yêu cầu chi tiết, điều kiện để cho điểm ý này"
+    }
+  ]
+}
+
+LƯU Ý:
+1. Không bỏ sót bất kỳ ý chấm nào trong bảng đáp án / biểu điểm.
+2. Tổng điểm "totalPoints" phải bằng tổng "points" của tất cả các tiêu chí trong "criteria".
+3. Chỉ trả về JSON hợp lệ, không giải thích thêm.`;
+
+  const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+  const response = await fetch(`${cleanBaseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: modelName,
+      temperature: 0.1,
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenAI API parse rubric error (${response.status}): ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const textOutput = data.choices?.[0]?.message?.content || '';
+  const cleanJson = textOutput.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleanJson);
+  } catch {
+    const match = cleanJson.match(/\{[\s\S]*\}/);
+    if (match) parsed = JSON.parse(match[0]);
+    else throw new Error('Không thể parse JSON từ OpenAI rubric');
+  }
+
+  return formatParsedRubric(parsed, fileName, text);
+}
+

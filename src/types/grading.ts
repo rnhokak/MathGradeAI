@@ -55,10 +55,29 @@ export interface StudentSubmission {
   error?: string;
 }
 
+export type AIProvider = 'gemini' | 'claude' | 'openai';
+
 export interface TeacherSettings {
   role: 'thầy' | 'cô';
   teacherName: string;
   strictness: 'standard' | 'strict' | 'encouraging';
+  provider: AIProvider;
+  
+  // Google Gemini
   geminiApiKey: string;
-  model: string;
+  geminiModel: string;
+  
+  // Anthropic Claude
+  claudeApiKey: string;
+  claudeModel: string;
+  claudeBaseUrl?: string;
+  
+  // OpenAI / OpenAPI-compatible
+  openaiApiKey: string;
+  openaiModel: string;
+  openaiBaseUrl?: string;
+
+  // Tương thích ngược với cấu hình cũ
+  model?: string;
 }
+
