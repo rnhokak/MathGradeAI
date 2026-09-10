@@ -265,6 +265,19 @@ code, pre, .font-mono {
   animation: pulseGlow 3s infinite ease-in-out;
 }
 
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
 /* Modal Overlay */
 .modal-overlay {
   position: fixed;

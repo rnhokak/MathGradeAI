@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   UploadCloud,
   FileCheck,
@@ -20,7 +20,9 @@ interface SubmissionUploaderProps {
   submissions: StudentSubmission[];
   rubric: RubricData;
   settings: TeacherSettings;
-  onUpdateSubmissions: (subs: StudentSubmission[]) => void;
+  onUpdateSubmissions: (
+    updater: StudentSubmission[] | ((prev: StudentSubmission[]) => StudentSubmission[])
+  ) => void;
   onSelectSubmissionToView: (id: string) => void;
 }
 
@@ -33,6 +35,13 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
 }) => {
   const [isProcessingFiles, setIsProcessingFiles] = useState(false);
   const [isBatchGrading, setIsBatchGrading] = useState(false);
+  const [gradingIds, setGradingIds] = useState<Set<string>>(new Set());
+  const gradingRef = useRef<Set<string>>(new Set());
+  const submissionsRef = useRef<StudentSubmission[]>(submissions);
+
+  useEffect(() => {
+    submissionsRef.current = submissions;
+  }, [submissions]);
 
   // Auto clean Vietnamese name from filename
   const cleanStudentName = (fileName: string): string => {
@@ -103,18 +112,26 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
       }
     }
 
-    onUpdateSubmissions(newSubs);
+    onUpdateSubmissions((prev) => [...prev, ...newSubs]);
     setIsProcessingFiles(false);
   };
 
   // Grade a single submission
   const gradeSubmission = async (subId: string) => {
-    const sub = submissions.find((s) => s.id === subId);
+    // Prevent double clicking on the same submission if already in flight
+    if (gradingRef.current.has(subId)) return;
+
+    const sub = submissionsRef.current.find((s) => s.id === subId);
     if (!sub) return;
 
-    // Update status to grading
-    const updated = submissions.map((s) => (s.id === subId ? { ...s, status: 'grading' as const } : s));
-    onUpdateSubmissions(updated);
+    // Track active grading in ref & state
+    gradingRef.current.add(subId);
+    setGradingIds(new Set(gradingRef.current));
+
+    // Update status to grading using functional updater to avoid stale state race conditions
+    onUpdateSubmissions((prev) =>
+      prev.map((s) => (s.id === subId ? { ...s, status: 'grading' as const, error: undefined } : s))
+    );
 
     try {
       const res = await fetch('/api/grade', {
@@ -135,20 +152,23 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Lỗi khi chấm bài');
 
-      onUpdateSubmissions(
-        submissions.map((s) =>
+      // Update state using functional updater - preserving parallel grading results
+      onUpdateSubmissions((prev) =>
+        prev.map((s) =>
           s.id === subId
             ? {
                 ...s,
                 status: 'done' as const,
                 gradingResult: data.gradingResult,
+                error: undefined,
               }
             : s
         )
       );
     } catch (err: any) {
-      onUpdateSubmissions(
-        submissions.map((s) =>
+      console.error(`Error grading submission ${subId}:`, err);
+      onUpdateSubmissions((prev) =>
+        prev.map((s) =>
           s.id === subId
             ? {
                 ...s,
@@ -158,24 +178,31 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
             : s
         )
       );
+    } finally {
+      gradingRef.current.delete(subId);
+      setGradingIds(new Set(gradingRef.current));
     }
   };
 
-  // Grade all idle submissions
+  // Grade all idle or error submissions sequentially
   const gradeAll = async () => {
+    if (isBatchGrading || gradingRef.current.size > 0) return;
     setIsBatchGrading(true);
-    const toGrade = submissions.filter((s) => s.status === 'idle' || s.status === 'error');
 
-    for (const sub of toGrade) {
-      await gradeSubmission(sub.id);
+    try {
+      const toGrade = submissionsRef.current.filter((s) => s.status === 'idle' || s.status === 'error');
+      for (const sub of toGrade) {
+        await gradeSubmission(sub.id);
+      }
+    } finally {
+      setIsBatchGrading(false);
     }
-
-    setIsBatchGrading(false);
   };
 
-  // Remove submission
+  // Remove submission safely
   const removeSubmission = (id: string) => {
-    onUpdateSubmissions(submissions.filter((s) => s.id !== id));
+    if (gradingRef.current.has(id)) return;
+    onUpdateSubmissions((prev) => prev.filter((s) => s.id !== id));
   };
 
   const completedCount = submissions.filter((s) => s.status === 'done').length;
@@ -204,7 +231,17 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
           </div>
 
           <div style={{ display: 'flex', gap: '12px' }}>
-            <label className="btn btn-secondary" style={{ cursor: isProcessingFiles ? 'not-allowed' : 'pointer' }}>
+            <label
+              className="btn btn-secondary"
+              style={{
+                cursor:
+                  isProcessingFiles || isBatchGrading || gradingIds.size > 0
+                    ? 'not-allowed'
+                    : 'pointer',
+                opacity:
+                  isProcessingFiles || isBatchGrading || gradingIds.size > 0 ? 0.6 : 1,
+              }}
+            >
               <UploadCloud size={16} />
               {isProcessingFiles ? 'Đang đọc files...' : 'Tải lên bài làm (Chọn nhiều)'}
               <input
@@ -213,7 +250,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                 accept=".docx,image/png,image/jpeg,image/jpg,image/webp"
                 onChange={handleFiles}
                 style={{ display: 'none' }}
-                disabled={isProcessingFiles}
+                disabled={isProcessingFiles || isBatchGrading || gradingIds.size > 0}
               />
             </label>
 
@@ -238,12 +275,38 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                 </span>
                 <button
                   onClick={gradeAll}
-                  disabled={isBatchGrading}
+                  disabled={
+                    isBatchGrading ||
+                    gradingIds.size > 0 ||
+                    submissions.filter((s) => s.status === 'idle' || s.status === 'error').length === 0
+                  }
                   className="btn btn-emerald"
-                  style={{ minWidth: '150px' }}
+                  style={{
+                    minWidth: '150px',
+                    opacity:
+                      isBatchGrading ||
+                      gradingIds.size > 0 ||
+                      submissions.filter((s) => s.status === 'idle' || s.status === 'error').length === 0
+                        ? 0.6
+                        : 1,
+                    cursor:
+                      isBatchGrading ||
+                      gradingIds.size > 0 ||
+                      submissions.filter((s) => s.status === 'idle' || s.status === 'error').length === 0
+                        ? 'not-allowed'
+                        : 'pointer',
+                  }}
                 >
-                  <Play size={16} />
-                  {isBatchGrading ? 'Đang chấm...' : 'Chấm tất cả bài'}
+                  {isBatchGrading ? (
+                    <>
+                      <RotateCw size={15} className="animate-spin" /> Đang chấm tất cả...
+                    </>
+                  ) : (
+                    <>
+                      <Play size={15} /> Chấm tất cả bài (
+                      {submissions.filter((s) => s.status === 'idle' || s.status === 'error').length})
+                    </>
+                  )}
                 </button>
               </div>
             )}
@@ -407,18 +470,44 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                     ) : (
                       <button
                         onClick={() => gradeSubmission(sub.id)}
-                        disabled={sub.status === 'grading'}
+                        disabled={sub.status === 'grading' || gradingIds.has(sub.id) || isBatchGrading}
                         className="btn btn-secondary"
-                        style={{ padding: '6px 12px', fontSize: '0.82rem' }}
+                        style={{
+                          padding: '6px 12px',
+                          fontSize: '0.82rem',
+                          opacity:
+                            sub.status === 'grading' || gradingIds.has(sub.id) || isBatchGrading ? 0.6 : 1,
+                          cursor:
+                            sub.status === 'grading' || gradingIds.has(sub.id) || isBatchGrading
+                              ? 'not-allowed'
+                              : 'pointer',
+                        }}
                       >
-                        <Play size={13} /> {sub.status === 'error' ? 'Thử chấm lại' : 'Chấm bài này'}
+                        {sub.status === 'grading' || gradingIds.has(sub.id) ? (
+                          <>
+                            <RotateCw size={13} className="animate-spin" /> Đang chấm...
+                          </>
+                        ) : (
+                          <>
+                            <Play size={13} /> {sub.status === 'error' ? 'Thử chấm lại' : 'Chấm bài này'}
+                          </>
+                        )}
                       </button>
                     )}
 
                     <button
                       onClick={() => removeSubmission(sub.id)}
+                      disabled={sub.status === 'grading' || gradingIds.has(sub.id) || isBatchGrading}
                       className="btn btn-danger"
-                      style={{ padding: '6px 8px' }}
+                      style={{
+                        padding: '6px 8px',
+                        opacity:
+                          sub.status === 'grading' || gradingIds.has(sub.id) || isBatchGrading ? 0.4 : 1,
+                        cursor:
+                          sub.status === 'grading' || gradingIds.has(sub.id) || isBatchGrading
+                            ? 'not-allowed'
+                            : 'pointer',
+                      }}
                       title="Xóa bài này"
                     >
                       <Trash2 size={14} />
