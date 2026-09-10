@@ -268,7 +268,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                 >
                   AI:{' '}
                   {settings.provider === 'claude'
-                    ? settings.claudeModel || 'Claude 3.7'
+                    ? settings.claudeModel || 'Claude Sonnet 4.6'
                     : settings.provider === 'openai'
                     ? settings.openaiModel || 'GPT-4o'
                     : settings.geminiModel || settings.model || 'Gemini 3.8'}

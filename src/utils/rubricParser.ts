@@ -339,9 +339,16 @@ export async function parseRubricWithClaude(
   tables: string[][][],
   fileName: string,
   apiKey: string,
-  modelName: string = 'claude-3-7-sonnet-20250219',
+  modelName: string = 'claude-sonnet-4-6',
   baseUrl: string = 'https://api.anthropic.com/v1'
 ): Promise<RubricData> {
+  const legacyClaudeModels = [
+    'claude-3-7-sonnet-20250219',
+    'claude-3-5-sonnet-20241022',
+    'claude-3-5-haiku-20241022',
+    'claude-3-opus-20240229',
+  ];
+  const effectiveModel = legacyClaudeModels.includes(modelName) ? 'claude-sonnet-4-6' : modelName;
   const tableSummary = tables
     .map(
       (t, idx) =>
@@ -391,7 +398,7 @@ LƯU Ý:
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: modelName,
+      model: effectiveModel,
       max_tokens: 4096,
       temperature: 0.1,
       messages: [{ role: 'user', content: prompt }],

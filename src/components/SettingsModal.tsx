@@ -36,7 +36,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     ...settings,
     provider: settings.provider || 'claude',
     geminiModel: settings.geminiModel || settings.model || 'gemini-3.8-flash',
-    claudeModel: settings.claudeModel || 'claude-3-7-sonnet-20250219',
+    claudeModel: settings.claudeModel || 'claude-sonnet-4-6',
     openaiModel: settings.openaiModel || 'gpt-4o',
     claudeBaseUrl: settings.claudeBaseUrl || 'https://api.anthropic.com/v1',
     openaiBaseUrl: settings.openaiBaseUrl || 'https://api.openai.com/v1',
@@ -54,10 +54,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   );
   const [isCustomClaude, setIsCustomClaude] = useState(
     ![
-      'claude-3-7-sonnet-20250219',
-      'claude-3-5-sonnet-20241022',
-      'claude-3-5-haiku-20241022',
-      'claude-3-opus-20240229',
+      'claude-sonnet-4-6',
+      'claude-opus-4-6',
+      'claude-haiku-4-5-20251001',
+      'claude-sonnet-4-5-20250929',
+      'claude-opus-4-5-20251101',
+      'claude-sonnet-5',
+      'claude-opus-5',
+      'claude-fable-5-1',
     ].includes(current.claudeModel)
   );
   const [isCustomOpenAI, setIsCustomOpenAI] = useState(
@@ -493,17 +497,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         }
                       }}
                     >
-                      <option value="claude-3-7-sonnet-20250219">
-                        Claude 3.7 Sonnet (Khuyên dùng - Mô hình suy luận và toán học mới nhất)
+                      <option value="claude-sonnet-4-6">
+                        Claude Sonnet 4.6 (Khuyên dùng - Chuẩn xác, chi tiết & nhận diện chữ viết tay tốt nhất)
                       </option>
-                      <option value="claude-3-5-sonnet-20241022">
-                        Claude 3.5 Sonnet (Nhận diện chữ viết tay & lập luận sắc bén)
+                      <option value="claude-opus-4-6">
+                        Claude Opus 4.6 (Lập luận & Suy luận toán học chuyên sâu nhất)
                       </option>
-                      <option value="claude-3-5-haiku-20241022">
-                        Claude 3.5 Haiku (Tốc độ cao & Tiết kiệm chi phí)
+                      <option value="claude-haiku-4-5-20251001">
+                        Claude Haiku 4.5 (Tốc độ cao & Tiết kiệm chi phí)
                       </option>
-                      <option value="claude-3-opus-20240229">
-                        Claude 3 Opus (Phân tích chuyên sâu)
+                      <option value="claude-sonnet-5">
+                        Claude Sonnet 5
+                      </option>
+                      <option value="claude-opus-5">
+                        Claude Opus 5
+                      </option>
+                      <option value="claude-sonnet-4-5-20250929">
+                        Claude Sonnet 4.5
+                      </option>
+                      <option value="claude-opus-4-5-20251101">
+                        Claude Opus 4.5
                       </option>
                       <option value="custom">-- Nhập tên model Claude tùy chỉnh --</option>
                     </select>
@@ -512,7 +525,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <input
                         type="text"
                         className="input-field font-mono"
-                        placeholder="Ví dụ: claude-3-7-sonnet-20250219"
+                        placeholder="Ví dụ: claude-sonnet-4-6"
                         value={current.claudeModel}
                         onChange={(e) => setCurrent({ ...current, claudeModel: e.target.value })}
                         style={{ marginTop: '8px' }}

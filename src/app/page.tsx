@@ -59,7 +59,7 @@ const DEFAULT_SETTINGS: TeacherSettings = {
   geminiApiKey: '',
   geminiModel: 'gemini-3.8-flash',
   claudeApiKey: '',
-  claudeModel: 'claude-3-7-sonnet-20250219',
+  claudeModel: 'claude-sonnet-4-6',
   claudeBaseUrl: 'https://api.anthropic.com/v1',
   openaiApiKey: '',
   openaiModel: 'gpt-4o',
@@ -86,12 +86,24 @@ export default function Home() {
         if (parsed.model === 'gemini-2.5-flash') {
           parsed.model = 'gemini-3.8-flash';
         }
+        // Auto migrate legacy 404 Claude models
+        const legacyClaudeModels = [
+          'claude-3-7-sonnet-20250219',
+          'claude-3-5-sonnet-20241022',
+          'claude-3-5-haiku-20241022',
+          'claude-3-opus-20240229',
+        ];
+        let claudeModel = parsed.claudeModel || DEFAULT_SETTINGS.claudeModel;
+        if (legacyClaudeModels.includes(claudeModel)) {
+          claudeModel = 'claude-sonnet-4-6';
+        }
+
         setSettings({
           ...DEFAULT_SETTINGS,
           ...parsed,
           provider: parsed.provider || 'claude',
           geminiModel: parsed.geminiModel || parsed.model || DEFAULT_SETTINGS.geminiModel,
-          claudeModel: parsed.claudeModel || DEFAULT_SETTINGS.claudeModel,
+          claudeModel,
           openaiModel: parsed.openaiModel || DEFAULT_SETTINGS.openaiModel,
           claudeBaseUrl: parsed.claudeBaseUrl || DEFAULT_SETTINGS.claudeBaseUrl,
           openaiBaseUrl: parsed.openaiBaseUrl || DEFAULT_SETTINGS.openaiBaseUrl,

@@ -188,7 +188,18 @@ export async function gradeWithClaude(
     /\/+$/,
     ''
   );
-  const model = settings.claudeModel || process.env.CLAUDE_MODEL || 'claude-3-7-sonnet-20250219';
+  let model = settings.claudeModel || process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
+  // Fallback for legacy models that return 404 on current Anthropic account tier
+  const legacyClaudeModels = [
+    'claude-3-7-sonnet-20250219',
+    'claude-3-5-sonnet-20241022',
+    'claude-3-5-haiku-20241022',
+    'claude-3-opus-20240229',
+  ];
+  if (legacyClaudeModels.includes(model)) {
+    console.warn(`Claude model "${model}" is not available on this API key. Auto-redirecting to claude-sonnet-4-6.`);
+    model = 'claude-sonnet-4-6';
+  }
 
   const promptText = buildGradingPrompt(
     rubric,

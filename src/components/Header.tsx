@@ -68,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
                   onClick={onOpenSettings}
                   title="Bấm để cấu hình Claude API"
                 >
-                  <Bot size={11} /> {settings.claudeModel || 'Claude 3.7'}
+                  <Bot size={11} /> {settings.claudeModel || 'Claude Sonnet 4.6'}
                 </span>
               ) : settings.provider === 'openai' ? (
                 <span
