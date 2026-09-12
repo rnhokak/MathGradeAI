@@ -19,7 +19,7 @@ export interface CriterionResult {
   maxPoints: number;
   awardedPoints: number;
   isCorrect: 'full' | 'partial' | 'wrong';
-  reason: string; // Tại sao cộng điểm hoặc trừ điểm
+  reason: string; // Lồng ghép tiến trình + ưu/nhược điểm + căn cứ cho/trừ điểm
 }
 
 export interface GradingResult {
@@ -32,14 +32,17 @@ export interface GradingResult {
   errorMessage?: string;
   gradedAt?: string;
   
-  // Chi tiết theo yêu cầu của giáo viên:
-  strengths: string[]; // Ưu điểm
-  weaknesses: string[]; // Nhược điểm
-  stepByStepAnalysis: string; // Phân tích học sinh đã làm được đến đâu, đúng ý nào, sai ý nào
-  criteriaBreakdown: CriterionResult[]; // Chi tiết từng tiêu chí
-  correctionGuide: string; // Chỉ ra cách sửa chi tiết cho học sinh tham khảo và rút kinh nghiệm
-  knowledgeToReview: string[]; // Kiến thức học sinh cần ôn lại để làm tốt dạng bài này
-  teacherComment: string; // Lời phê chân thật của Thầy/Cô (thầy và em hoặc cô và em)
+  // Chi tiết nhận xét theo yêu cầu sư phạm:
+  generalComment: string; // 1. Nhận xét chung ngắn gọn (tối đa 3 gạch đầu dòng): hướng làm, nhận diện dạng bài, trình bày
+  criteriaBreakdown: CriterionResult[]; // 2. Chi tiết bài làm (lồng ghép tiến trình + ưu/nhược + cho/trừ điểm)
+  strengths: string[]; // 3. Ưu điểm tổng hợp ngắn gọn
+  weaknesses: string[]; // 3. Nhược điểm tổng hợp ngắn gọn
+  correctionGuide: string; // 5. Hướng dẫn sửa bài và rút kinh nghiệm
+  teacherComment: string; // Lời phê chân thật, ngắn gọn của Thầy/Cô
+  
+  // Tương thích ngược nếu còn dữ liệu cũ
+  stepByStepAnalysis?: string;
+  knowledgeToReview?: string[];
 }
 
 export interface StudentSubmission {
@@ -80,4 +83,3 @@ export interface TeacherSettings {
   // Tương thích ngược với cấu hình cũ
   model?: string;
 }
-

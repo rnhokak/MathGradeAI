@@ -43,6 +43,24 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
     submissionsRef.current = submissions;
   }, [submissions]);
 
+  // Clean up any historical duplicate entries in state
+  useEffect(() => {
+    const seen = new Set<string>();
+    let hasDuplicate = false;
+    for (const sub of submissions) {
+      if (seen.has(sub.id)) {
+        hasDuplicate = true;
+        break;
+      }
+      seen.add(sub.id);
+    }
+    if (hasDuplicate) {
+      onUpdateSubmissions((prev) =>
+        prev.filter((sub, index, self) => index === self.findIndex((s) => s.id === sub.id))
+      );
+    }
+  }, [submissions, onUpdateSubmissions]);
+
   // Auto clean Vietnamese name from filename
   const cleanStudentName = (fileName: string): string => {
     let name = fileName.replace(/\.[^/.]+$/, ''); // remove extension
@@ -62,12 +80,14 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
     if (!files || files.length === 0) return;
 
     setIsProcessingFiles(true);
-    const newSubs: StudentSubmission[] = [...submissions];
+    const newSubs: StudentSubmission[] = [];
+    const timestamp = Date.now();
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const isDocx = file.name.endsWith('.docx');
       const isImage = /\.(png|jpe?g|webp|bmp)$/i.test(file.name);
+      const uniqueId = `sub-${timestamp}-${Math.random().toString(36).slice(2, 8)}-${i}`;
 
       if (isDocx) {
         try {
@@ -80,7 +100,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
           const data = await res.json();
           if (res.ok) {
             newSubs.push({
-              id: `sub-${Date.now()}-${i}`,
+              id: uniqueId,
               studentName: cleanStudentName(file.name),
               fileName: file.name,
               fileType: 'docx',
@@ -101,7 +121,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
         });
 
         newSubs.push({
-          id: `sub-${Date.now()}-${i}`,
+          id: uniqueId,
           studentName: cleanStudentName(file.name),
           fileName: file.name,
           fileType: 'image',
@@ -112,7 +132,13 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
       }
     }
 
-    onUpdateSubmissions((prev) => [...prev, ...newSubs]);
+    onUpdateSubmissions((prev) => {
+      const existingIds = new Set(prev.map((s) => s.id));
+      const filtered = newSubs.filter((s) => !existingIds.has(s.id));
+      return [...prev, ...filtered];
+    });
+
+    e.target.value = '';
     setIsProcessingFiles(false);
   };
 
@@ -205,7 +231,12 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
     onUpdateSubmissions((prev) => prev.filter((s) => s.id !== id));
   };
 
-  const completedCount = submissions.filter((s) => s.status === 'done').length;
+  // Deduplicate submissions by ID so we never render duplicates and keys are strictly unique
+  const displaySubmissions = submissions.filter(
+    (sub, index, self) => index === self.findIndex((s) => s.id === sub.id)
+  );
+
+  const completedCount = displaySubmissions.filter((s) => s.status === 'done').length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -254,7 +285,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
               />
             </label>
 
-            {submissions.length > 0 && (
+            {displaySubmissions.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span
                   className={`badge ${
@@ -278,7 +309,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                   disabled={
                     isBatchGrading ||
                     gradingIds.size > 0 ||
-                    submissions.filter((s) => s.status === 'idle' || s.status === 'error').length === 0
+                    displaySubmissions.filter((s) => s.status === 'idle' || s.status === 'error').length === 0
                   }
                   className="btn btn-emerald"
                   style={{
@@ -286,13 +317,13 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                     opacity:
                       isBatchGrading ||
                       gradingIds.size > 0 ||
-                      submissions.filter((s) => s.status === 'idle' || s.status === 'error').length === 0
+                      displaySubmissions.filter((s) => s.status === 'idle' || s.status === 'error').length === 0
                         ? 0.6
                         : 1,
                     cursor:
                       isBatchGrading ||
                       gradingIds.size > 0 ||
-                      submissions.filter((s) => s.status === 'idle' || s.status === 'error').length === 0
+                      displaySubmissions.filter((s) => s.status === 'idle' || s.status === 'error').length === 0
                         ? 'not-allowed'
                         : 'pointer',
                   }}
@@ -304,7 +335,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                   ) : (
                     <>
                       <Play size={15} /> Chấm tất cả bài (
-                      {submissions.filter((s) => s.status === 'idle' || s.status === 'error').length})
+                      {displaySubmissions.filter((s) => s.status === 'idle' || s.status === 'error').length})
                     </>
                   )}
                 </button>
@@ -326,11 +357,11 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
         >
           <h3 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <FileCheck size={18} color="#34d399" />
-            Danh Sách Bài Làm ({submissions.length} bài - Đã chấm: {completedCount}/{submissions.length})
+            Danh Sách Bài Làm ({displaySubmissions.length} bài - Đã chấm: {completedCount}/{displaySubmissions.length})
           </h3>
         </div>
 
-        {submissions.length === 0 ? (
+        {displaySubmissions.length === 0 ? (
           <div
             style={{
               padding: '48px 24px',
@@ -350,13 +381,13 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {submissions.map((sub, idx) => {
+            {displaySubmissions.map((sub, idx) => {
               const hasImages = sub.images && sub.images.length > 0;
               const isGraded = sub.status === 'done';
 
               return (
                 <div
-                  key={sub.id}
+                  key={`${sub.id}-${idx}`}
                   style={{
                     display: 'flex',
                     alignItems: 'center',

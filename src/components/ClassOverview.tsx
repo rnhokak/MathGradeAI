@@ -13,7 +13,9 @@ export const ClassOverview: React.FC<ClassOverviewProps> = ({
   submissions,
   onSelectStudent,
 }) => {
-  const gradedList = submissions.filter((s) => s.status === 'done' && s.gradingResult);
+  const gradedList = submissions
+    .filter((s) => s.status === 'done' && s.gradingResult)
+    .filter((sub, index, self) => index === self.findIndex((s) => s.id === sub.id));
 
   if (gradedList.length === 0) {
     return (
@@ -127,7 +129,7 @@ export const ClassOverview: React.FC<ClassOverviewProps> = ({
                 const r = sub.gradingResult!;
                 return (
                   <tr
-                    key={sub.id}
+                    key={`${sub.id}-${i}`}
                     style={{
                       borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
                       cursor: 'pointer',

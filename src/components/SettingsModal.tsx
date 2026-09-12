@@ -35,6 +35,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [current, setCurrent] = useState<TeacherSettings>({
     ...settings,
     provider: settings.provider || 'claude',
+    strictness: settings.strictness || 'strict',
     geminiModel: settings.geminiModel || settings.model || 'gemini-3.8-flash',
     claudeModel: settings.claudeModel || 'claude-sonnet-4-6',
     openaiModel: settings.openaiModel || 'gpt-4o',
@@ -182,20 +183,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 fontSize: '0.88rem',
                 fontWeight: 700,
                 color: '#f8fafc',
-                marginBottom: '8px',
-                display: 'block',
+                marginBottom: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
               }}
             >
+              <ShieldCheck size={16} color="#f87171" />
               Mức Độ Chặt Chẽ Khi Chấm Bài:
             </label>
+            <p style={{ fontSize: '0.76rem', color: '#94a3b8', marginBottom: '8px' }}>
+              Ảnh hưởng trực tiếp đến cách AI đánh giá lỗi nhỏ (thiếu điều kiện, sai ký hiệu, bỏ bước...).
+            </p>
             <select
               className="input-field"
               value={current.strictness}
               onChange={(e) => setCurrent({ ...current, strictness: e.target.value as any })}
             >
-              <option value="standard">Chuẩn kỳ thi (ĐGNL & Tốt nghiệp THPT)</option>
-              <option value="strict">Khắt khe (Trừ điểm mạnh nếu thiếu điều kiện hoặc làm tắt)</option>
-              <option value="encouraging">Khuyến khích & Động viên (Bỏ qua sơ suất nhỏ về trình bày)</option>
+              <option value="strict">🔴 Khắt khe — Mặc định (Mọi thiếu sót dù nhỏ đều trừ điểm)</option>
+              <option value="standard">🟡 Chuẩn kỳ thi — THPT/ĐGNL (Linh hoạt với sơ suất nhỏ về trình bày)</option>
+              <option value="encouraging">🟢 Khuyến khích (Ưu tiên ghi nhận tư duy đúng, bỏ qua hình thức)</option>
             </select>
           </div>
 

@@ -141,19 +141,35 @@ export async function POST(req: NextRequest) {
               spacing: { after: 200 },
             }),
 
-            // Table of criteria
+            // Section 1: Nhận xét chung
             new Paragraph({
-              children: [new TextRun({ text: 'I. BẢNG ĐIỂM CHI TIẾT THEO RUBRIC', bold: true, size: 24 })],
-              spacing: { before: 100, after: 100 },
+              children: [new TextRun({ text: 'I. NHẬN XÉT CHUNG', bold: true, size: 24, color: '0284C7' })],
+              spacing: { before: 100, after: 80 },
+            }),
+            ...(gradingResult.generalComment || '• Học sinh đã nộp bài làm.')
+              .split('\n')
+              .filter((line) => line.trim())
+              .map(
+                (line) =>
+                  new Paragraph({
+                    children: [new TextRun({ text: line.trim().startsWith('•') ? line.trim() : `• ${line.trim()}` })],
+                    spacing: { after: 60 },
+                  })
+              ),
+
+            // Section 2: Table of criteria
+            new Paragraph({
+              children: [new TextRun({ text: 'II. BẢNG ĐIỂM CHI TIẾT THEO RUBRIC', bold: true, size: 24 })],
+              spacing: { before: 140, after: 100 },
             }),
             new Table({
               rows: tableRows,
               width: { size: 100, type: WidthType.PERCENTAGE },
             }),
 
-            // Section 2: Ưu điểm
+            // Section 3: Ưu điểm
             new Paragraph({
-              children: [new TextRun({ text: 'II. ƯU ĐIỂM', bold: true, size: 24, color: '15803D' })],
+              children: [new TextRun({ text: 'III. ƯU ĐIỂM', bold: true, size: 24, color: '15803D' })],
               spacing: { before: 200, after: 80 },
             }),
             ...(gradingResult.strengths || []).map(
@@ -164,9 +180,9 @@ export async function POST(req: NextRequest) {
                 })
             ),
 
-            // Section 3: Nhược điểm
+            // Section 4: Nhược điểm
             new Paragraph({
-              children: [new TextRun({ text: 'III. NHƯỢC ĐIỂM & ĐIỂM CẦN LƯU Ý', bold: true, size: 24, color: 'B45309' })],
+              children: [new TextRun({ text: 'IV. NHƯỢC ĐIỂM & ĐIỂM CẦN LƯU Ý', bold: true, size: 24, color: 'B45309' })],
               spacing: { before: 160, after: 80 },
             }),
             ...(gradingResult.weaknesses || []).map(
@@ -177,28 +193,15 @@ export async function POST(req: NextRequest) {
                 })
             ),
 
-            // Section 4: Hướng dẫn sửa bài
+            // Section 5: Hướng dẫn sửa bài
             new Paragraph({
-              children: [new TextRun({ text: 'IV. HƯỚNG DẪN SỬA BÀI & RÚT KINH NGHIỆM', bold: true, size: 24, color: '4338CA' })],
+              children: [new TextRun({ text: 'V. HƯỚNG DẪN SỬA BÀI & RÚT KINH NGHIỆM', bold: true, size: 24, color: '4338CA' })],
               spacing: { before: 160, after: 80 },
             }),
             new Paragraph({
               children: [new TextRun({ text: gradingResult.correctionGuide || 'Không có.' })],
               spacing: { after: 120 },
             }),
-
-            // Section 5: Kiến thức cần ôn lại
-            new Paragraph({
-              children: [new TextRun({ text: 'V. KIẾN THỨC CẦN ÔN TẬP LẠI', bold: true, size: 24, color: '6D28D9' })],
-              spacing: { before: 160, after: 80 },
-            }),
-            ...(gradingResult.knowledgeToReview || []).map(
-              (k) =>
-                new Paragraph({
-                  children: [new TextRun({ text: `✔ ${k}` })],
-                  spacing: { after: 60 },
-                })
-            ),
 
             // Section 6: Lời phê của giáo viên
             new Paragraph({

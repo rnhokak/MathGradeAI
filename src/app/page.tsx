@@ -54,7 +54,7 @@ const DEFAULT_RUBRIC: RubricData = {
 const DEFAULT_SETTINGS: TeacherSettings = {
   role: 'thầy',
   teacherName: '',
-  strictness: 'standard',
+  strictness: 'strict',
   provider: 'claude',
   geminiApiKey: '',
   geminiModel: 'gemini-3.8-flash',

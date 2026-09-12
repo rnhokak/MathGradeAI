@@ -11,6 +11,49 @@ import { buildGradingPrompt } from './promptBuilder';
 /**
  * Robust JSON extractor from AI output that may contain markdown or surrounding text
  */
+/**
+ * Attempts to repair a truncated JSON string by closing unclosed braces/brackets
+ * and trimming dangling incomplete fields.
+ */
+function repairTruncatedJson(raw: string): string {
+  // Remove trailing incomplete key-value pair that caused truncation
+  // e.g., ..."field": "incomplete string  → strip back to last valid comma or {
+  let s = raw.trimEnd();
+
+  // Remove trailing comma before trying to close
+  s = s.replace(/,\s*$/, '');
+
+  // Count unclosed braces and brackets
+  let braces = 0;
+  let brackets = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (escaped) { escaped = false; continue; }
+    if (ch === '\\' && inString) { escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') braces++;
+    else if (ch === '}') braces--;
+    else if (ch === '[') brackets++;
+    else if (ch === ']') brackets--;
+  }
+
+  // If we're inside a string (unterminated), close it first
+  if (inString) s += '"';
+
+  // Remove trailing comma again after potential string close
+  s = s.replace(/,\s*$/, '');
+
+  // Close unclosed brackets and braces
+  for (let i = 0; i < brackets; i++) s += ']';
+  for (let i = 0; i < braces; i++) s += '}';
+
+  return s;
+}
+
 export function extractJsonFromText(rawText: string): any {
   if (!rawText) {
     throw new Error('AI trả về phản hồi rỗng.');
@@ -34,10 +77,17 @@ export function extractJsonFromText(rawText: string): any {
       const jsonCandidate = cleaned.substring(firstBrace, lastBrace + 1);
       try {
         return JSON.parse(jsonCandidate);
-      } catch (err: any) {
-        throw new Error(
-          `Không thể bóc tách JSON hợp lệ từ phản hồi AI: ${err.message || err}. Dữ liệu thô: ${cleaned.substring(0, 200)}...`
-        );
+      } catch {
+        // 3. JSON bị truncate — thử repair
+        const truncated = cleaned.substring(firstBrace);
+        try {
+          const repaired = repairTruncatedJson(truncated);
+          return JSON.parse(repaired);
+        } catch (err: any) {
+          throw new Error(
+            `Không thể bóc tách JSON hợp lệ từ phản hồi AI: ${err.message || err}. Dữ liệu thô: ${cleaned.substring(0, 200)}...`
+          );
+        }
       }
     }
     throw new Error(
@@ -68,22 +118,21 @@ export function buildGradingResult(
     gradedAt: new Date().toISOString(),
     strengths: Array.isArray(parsedJson.strengths) ? parsedJson.strengths : [],
     weaknesses: Array.isArray(parsedJson.weaknesses) ? parsedJson.weaknesses : [],
-    stepByStepAnalysis: parsedJson.stepByStepAnalysis || '',
+    generalComment: parsedJson.generalComment || '',
     criteriaBreakdown: Array.isArray(parsedJson.criteriaBreakdown)
       ? parsedJson.criteriaBreakdown.map((c: any, idx: number) => ({
           criterionId: c.criterionId || `crit-${idx + 1}`,
           criterionName: c.criterionName || `Tiêu chí ${idx + 1}`,
           maxPoints: Number(c.maxPoints ?? 0),
           awardedPoints: Number(c.awardedPoints ?? 0),
-          isCorrect: c.isCorrect || 'wrong',
+          isCorrect: c.isCorrect || (Number(c.awardedPoints) >= Number(c.maxPoints) ? 'full' : Number(c.awardedPoints) > 0 ? 'partial' : 'wrong'),
           reason: c.reason || '',
         }))
       : [],
     correctionGuide: parsedJson.correctionGuide || '',
-    knowledgeToReview: Array.isArray(parsedJson.knowledgeToReview)
-      ? parsedJson.knowledgeToReview
-      : [],
     teacherComment: parsedJson.teacherComment || '',
+    stepByStepAnalysis: parsedJson.stepByStepAnalysis || undefined,
+    knowledgeToReview: parsedJson.knowledgeToReview || undefined,
   };
 }
 
@@ -248,7 +297,7 @@ export async function gradeWithClaude(
     },
     body: JSON.stringify({
       model,
-      max_tokens: 4096,
+      max_tokens: 8192,
       temperature: 0.1,
       messages: [
         {

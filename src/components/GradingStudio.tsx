@@ -10,7 +10,7 @@ import {
   Copy,
   Printer,
   Edit3,
-  BookOpen,
+  FileText,
   ArrowLeft,
   Sparkles,
   Save,
@@ -40,6 +40,7 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
   const [copiedToast, setCopiedToast] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isEditingComment, setIsEditingComment] = useState(false);
+  const [isEditingGeneralComment, setIsEditingGeneralComment] = useState(false);
 
   if (!result) {
     return (
@@ -67,19 +68,22 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
 Học sinh: ${result.studentName}
 Điểm số: ${result.score}/${result.maxScore} điểm
 
-1. ƯU ĐIỂM:
+1. NHẬN XÉT CHUNG:
+${result.generalComment || 'Chưa có nhận xét chung.'}
+
+2. CHI TIẾT BÀI LÀM:
+${(result.criteriaBreakdown || []).map((c) => `• ${c.criterionName} (${c.awardedPoints}/${c.maxPoints}đ): ${c.reason}`).join('\n')}
+
+3. ƯU ĐIỂM:
 ${(result.strengths || []).map((s) => `• ${s}`).join('\n')}
 
-2. NHƯỢC ĐIỂM CẦN LƯU Ý:
+4. NHƯỢC ĐIỂM CẦN LƯU Ý:
 ${(result.weaknesses || []).map((w) => `• ${w}`).join('\n')}
 
-3. HƯỚNG DẪN SỬA BÀI & RÚT KINH NGHIỆM:
-${result.correctionGuide}
+5. HƯỚNG DẪN SỬA BÀI & RÚT KINH NGHIỆM:
+${result.correctionGuide || 'Không có.'}
 
-4. KIẾN THỨC CẦN ÔN TẬP LẠI:
-${(result.knowledgeToReview || []).map((k) => `✔ ${k}`).join('\n')}
-
-5. LỜI NHẬN XÉT CỦA GIÁO VIÊN:
+LỜI NHẬN XÉT CỦA GIÁO VIÊN:
 "${result.teacherComment}"
 `;
 
@@ -296,12 +300,12 @@ ${(result.knowledgeToReview || []).map((k) => `✔ ${k}`).join('\n')}
             )}
           </div>
 
-          {/* Teacher Authentic Remarks */}
+          {/* 1. NHẬN XÉT CHUNG */}
           <div
             className="glass-panel"
             style={{
-              padding: '20px',
-              borderLeft: '4px solid #6366f1',
+              padding: '18px 20px',
+              borderLeft: '4px solid #38bdf8',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
@@ -309,54 +313,54 @@ ${(result.knowledgeToReview || []).map((k) => `✔ ${k}`).join('\n')}
                 style={{
                   fontSize: '0.95rem',
                   fontWeight: 700,
-                  color: '#a5b4fc',
+                  color: '#38bdf8',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
                 }}
               >
-                <MessageSquare size={16} />
-                Lời Nhận Xét Của {settings.role === 'cô' ? 'Cô' : 'Thầy'}
+                <FileText size={16} />
+                1. Nhận Xét Chung (Tối đa 3 gạch đầu dòng)
               </h3>
               <button
-                onClick={() => setIsEditingComment(!isEditingComment)}
+                onClick={() => setIsEditingGeneralComment(!isEditingGeneralComment)}
                 className="btn btn-secondary"
                 style={{ padding: '4px 8px', fontSize: '0.75rem' }}
               >
-                {isEditingComment ? 'Xong' : 'Chỉnh sửa'}
+                {isEditingGeneralComment ? 'Xong' : 'Chỉnh sửa'}
               </button>
             </div>
 
-            {isEditingComment ? (
+            {isEditingGeneralComment ? (
               <textarea
                 className="textarea-field"
-                rows={4}
-                value={result.teacherComment}
+                rows={3}
+                value={result.generalComment || ''}
                 onChange={(e) => {
-                  const updated = { ...result, teacherComment: e.target.value };
+                  const updated = { ...result, generalComment: e.target.value };
                   setResult(updated);
                   onUpdateResult(updated);
                 }}
               />
             ) : (
-              <p
+              <div
                 style={{
-                  fontSize: '0.92rem',
+                  fontSize: '0.88rem',
                   lineHeight: '1.6',
-                  fontStyle: 'italic',
                   color: '#e2e8f0',
+                  whiteSpace: 'pre-line',
                 }}
               >
-                "{result.teacherComment}"
-              </p>
+                {result.generalComment || '• Học sinh đã nộp bài làm.'}
+              </div>
             )}
           </div>
 
-          {/* Criteria Breakdown Table */}
+          {/* 2. CHI TIẾT BÀI LÀM THEO RUBRIC */}
           <div className="glass-panel" style={{ padding: '20px' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px', color: '#f8fafc' }}>
               <TrendingUp size={16} color="#34d399" />
-              Chi Tiết Từng Bước Theo Thang Điểm Rubric
+              2. Chi Tiết Bài Làm Theo Thang Điểm Rubric
             </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -402,7 +406,7 @@ ${(result.knowledgeToReview || []).map((k) => `✔ ${k}`).join('\n')}
                     </div>
                   </div>
 
-                  <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                  <p style={{ fontSize: '0.84rem', color: '#cbd5e1', lineHeight: '1.5' }}>
                     {crit.reason}
                   </p>
                 </div>
@@ -410,7 +414,7 @@ ${(result.knowledgeToReview || []).map((k) => `✔ ${k}`).join('\n')}
             </div>
           </div>
 
-          {/* Strengths & Weaknesses Grid */}
+          {/* 3. TỔNG HỢP ƯU ĐIỂM & NHƯỢC ĐIỂM */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             {/* ƯU ĐIỂM */}
             <div
@@ -431,7 +435,7 @@ ${(result.knowledgeToReview || []).map((k) => `✔ ${k}`).join('\n')}
                   gap: '6px',
                 }}
               >
-                <CheckCircle size={15} /> ƯU ĐIỂM
+                <CheckCircle size={15} /> 3. ƯU ĐIỂM
               </h4>
               <ul style={{ paddingLeft: '18px', fontSize: '0.82rem', color: '#cbd5e1', lineHeight: '1.5' }}>
                 {(result.strengths || []).map((s, i) => (
@@ -473,19 +477,7 @@ ${(result.knowledgeToReview || []).map((k) => `✔ ${k}`).join('\n')}
             </div>
           </div>
 
-          {/* Step By Step Analysis */}
-          {result.stepByStepAnalysis && (
-            <div className="glass-panel" style={{ padding: '18px' }}>
-              <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f8fafc', marginBottom: '8px' }}>
-                ĐÁNH GIÁ TIẾN TRÌNH LÀM BÀI CỦA HỌC SINH
-              </h4>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-                {result.stepByStepAnalysis}
-              </p>
-            </div>
-          )}
-
-          {/* Correction Guide */}
+          {/* 4. HƯỚNG DẪN SỬA BÀI & RÚT KINH NGHIỆM */}
           <div
             className="glass-panel"
             style={{
@@ -504,45 +496,67 @@ ${(result.knowledgeToReview || []).map((k) => `✔ ${k}`).join('\n')}
                 gap: '6px',
               }}
             >
-              <Sparkles size={15} /> HƯỚNG DẪN SỬA BÀI & RÚT KINH NGHIỆM
+              <Sparkles size={15} /> 4. HƯỚNG DẪN SỬA BÀI & RÚT KINH NGHIỆM
             </h4>
-            <p style={{ fontSize: '0.85rem', color: '#e2e8f0', lineHeight: '1.5' }}>
-              {result.correctionGuide}
+            <p style={{ fontSize: '0.85rem', color: '#e2e8f0', lineHeight: '1.5', whiteSpace: 'pre-line' }}>
+              {result.correctionGuide || 'Không có yêu cầu chỉnh sửa đặc biệt.'}
             </p>
           </div>
 
-          {/* Knowledge To Review */}
-          <div className="glass-panel" style={{ padding: '18px' }}>
-            <h4
-              style={{
-                fontSize: '0.88rem',
-                fontWeight: 700,
-                color: '#f8fafc',
-                marginBottom: '10px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              <BookOpen size={15} color="#c084fc" /> KIẾN THỨC CẦN ÔN TẬP LẠI
-            </h4>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {(result.knowledgeToReview || []).map((item, i) => (
-                <span
-                  key={i}
-                  style={{
-                    fontSize: '0.8rem',
-                    padding: '6px 12px',
-                    borderRadius: 'var(--radius-sm)',
-                    background: 'rgba(139, 92, 246, 0.15)',
-                    border: '1px solid rgba(139, 92, 246, 0.3)',
-                    color: '#c4b5fd',
-                  }}
-                >
-                  ✔ {item}
-                </span>
-              ))}
+          {/* 5. LỜI NHẬN XÉT CỦA GIÁO VIÊN */}
+          <div
+            className="glass-panel"
+            style={{
+              padding: '20px',
+              borderLeft: '4px solid #6366f1',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <h3
+                style={{
+                  fontSize: '0.95rem',
+                  fontWeight: 700,
+                  color: '#a5b4fc',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <MessageSquare size={16} />
+                5. Lời Nhận Xét Của {settings.role === 'cô' ? 'Cô' : 'Thầy'}
+              </h3>
+              <button
+                onClick={() => setIsEditingComment(!isEditingComment)}
+                className="btn btn-secondary"
+                style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+              >
+                {isEditingComment ? 'Xong' : 'Chỉnh sửa'}
+              </button>
             </div>
+
+            {isEditingComment ? (
+              <textarea
+                className="textarea-field"
+                rows={4}
+                value={result.teacherComment}
+                onChange={(e) => {
+                  const updated = { ...result, teacherComment: e.target.value };
+                  setResult(updated);
+                  onUpdateResult(updated);
+                }}
+              />
+            ) : (
+              <p
+                style={{
+                  fontSize: '0.92rem',
+                  lineHeight: '1.6',
+                  fontStyle: 'italic',
+                  color: '#e2e8f0',
+                }}
+              >
+                "{result.teacherComment}"
+              </p>
+            )}
           </div>
         </div>
       </div>
