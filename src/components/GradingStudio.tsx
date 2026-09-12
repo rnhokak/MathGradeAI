@@ -329,11 +329,20 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Sparkles size={18} color="#818cf8" />
                   <h3 style={{ fontSize: '0.96rem', fontWeight: 700, color: '#f8fafc' }}>
-                    Bảng Đối Chiếu Điểm 3 Model AI (Gemini + Claude + GPT-4o)
+                    {result.consensusReport.evaluations.length >= 3
+                      ? 'Bảng Đối Chiếu Điểm 3 Model AI (Gemini + Claude + GPT-4o)'
+                      : result.consensusReport.evaluations.length === 2
+                      ? 'Bảng Đối Chiếu Điểm 2 Model AI'
+                      : `Bảng Điểm AI — Chỉ 1 Model Hoàn Thành (${result.consensusReport.evaluations[0]?.provider?.toUpperCase() || 'AI'})`}
                   </h3>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {result.consensusReport.status === 'single_model' && (
+                    <span className="badge badge-amber" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
+                      <AlertTriangle size={12} /> Chỉ 1 Model hoàn thành (1/3)
+                    </span>
+                  )}
                   {result.consensusReport.status === 'unanimous' && (
                     <span className="badge badge-emerald" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
                       <CheckCircle size={12} /> Đồng thuận tuyệt đối (3/3)
@@ -341,7 +350,7 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                   )}
                   {result.consensusReport.status === 'majority' && (
                     <span className="badge badge-amber" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
-                      <Layers size={12} /> Đồng thuận đa số (2/3)
+                      <Layers size={12} /> Đồng thuận {result.consensusReport.evaluations.length >= 3 ? 'đa số (2/3)' : '2 Model'}
                     </span>
                   )}
                   {result.consensusReport.status === 'resolved_after_retry' && (
@@ -365,6 +374,29 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                 </div>
               </div>
 
+              {/* Warning banner if any model failed due to quota/network */}
+              {result.consensusReport.failedModels && result.consensusReport.failedModels.length > 0 && (
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    marginBottom: '10px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'rgba(245, 158, 11, 0.1)',
+                    border: '1px solid rgba(245, 158, 11, 0.25)',
+                    color: '#fde68a',
+                    fontSize: '0.78rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <AlertTriangle size={14} color="#fbbf24" style={{ flexShrink: 0 }} />
+                  <span>
+                    <strong>Cảnh báo hạn mức:</strong> {result.consensusReport.failedModels.map((f) => `${f.provider}: ${f.reason}`).join(' | ')}.
+                  </span>
+                </div>
+              )}
+
               {/* Summary note */}
               <p style={{ fontSize: '0.82rem', color: '#cbd5e1', lineHeight: 1.5, marginBottom: showConsensusDetails ? '14px' : '0' }}>
                 {result.consensusReport.summary}
@@ -384,11 +416,30 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
                         <th style={{ padding: '8px 10px', fontWeight: 600 }}>Tiêu chí thang điểm</th>
-                        {result.consensusReport.evaluations.map((ev, idx) => (
-                          <th key={idx} style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'center' }}>
-                            {ev.provider.toUpperCase()} ({ev.modelName.split('-').slice(0, 2).join('-')})
-                          </th>
-                        ))}
+                        {result.consensusReport.evaluations.map((ev, idx) => {
+                          const isFallback = ev.modelName.includes('Dự phòng');
+                          const headerLabel = isFallback
+                            ? 'GEMINI (Dự phòng cho OpenAI)'
+                            : `${ev.provider.toUpperCase()} (${ev.modelName.split('-').slice(0, 2).join('-')})`;
+                          return (
+                            <th
+                              key={idx}
+                              style={{
+                                padding: '8px 10px',
+                                fontWeight: 600,
+                                textAlign: 'center',
+                                color: isFallback ? '#fbbf24' : undefined,
+                              }}
+                              title={
+                                isFallback
+                                  ? 'Đang dùng Gemini 3.7 Flash dự phòng do tài khoản OpenAI hết hạn mức tín dụng ($0 credits)'
+                                  : undefined
+                              }
+                            >
+                              {headerLabel}
+                            </th>
+                          );
+                        })}
                         <th
                           style={{
                             padding: '8px 10px',

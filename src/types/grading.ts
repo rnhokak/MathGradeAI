@@ -40,11 +40,12 @@ export interface ModelEvaluation {
 export interface ConsensusReport {
   roundCount: number;
   regradeCount: number;
-  status: 'unanimous' | 'majority' | 'resolved_after_retry' | 'conflict';
+  status: 'unanimous' | 'majority' | 'resolved_after_retry' | 'conflict' | 'single_model';
   modelsUsed: string[];
   scoreDifference: number;
   evaluations: ModelEvaluation[];
   summary: string;
+  failedModels?: { provider: string; reason: string }[];
 }
 
 export interface GradingResult {

@@ -823,7 +823,15 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
 
                         {/* Consensus Badge */}
                         {consensus ? (
-                          consensus.status === 'unanimous' ? (
+                          consensus.status === 'single_model' ? (
+                            <span
+                              className="badge badge-amber"
+                              title={consensus.summary}
+                              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
+                            >
+                              <AlertCircle size={12} /> Chỉ 1 Model ({consensus.evaluations[0]?.provider?.toUpperCase() || 'AI'})
+                            </span>
+                          ) : consensus.status === 'unanimous' ? (
                             <span
                               className="badge badge-emerald"
                               title={consensus.summary}
@@ -837,7 +845,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                               title={consensus.summary}
                               style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
                             >
-                              <Layers size={12} /> Đồng thuận 2/3 (Lệch {consensus.scoreDifference}đ)
+                              <Layers size={12} /> Đồng thuận {consensus.evaluations.length >= 3 ? 'đa số (2/3)' : '2 Model'} (Lệch {consensus.scoreDifference}đ)
                             </span>
                           ) : consensus.status === 'resolved_after_retry' ? (
                             <span
