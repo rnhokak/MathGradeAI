@@ -36,6 +36,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     ...settings,
     provider: settings.provider || 'claude',
     strictness: settings.strictness || 'strict',
+    gradingMode: settings.gradingMode || 'triple_consensus',
+    queueDelayMs: settings.queueDelayMs ?? 2000,
+    maxRegradeRetries: settings.maxRegradeRetries ?? 2,
+    consensusTolerance: settings.consensusTolerance ?? 0.25,
     geminiModel: settings.geminiModel || settings.model || 'gemini-3.8-flash',
     claudeModel: settings.claudeModel || 'claude-sonnet-4-6',
     openaiModel: settings.openaiModel || 'gpt-4o',
@@ -206,6 +210,172 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </select>
           </div>
 
+          {/* Grading Mode Selector: Triple-Model Consensus vs Single Model */}
+          <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '18px' }}>
+            <label
+              style={{
+                fontSize: '0.92rem',
+                fontWeight: 700,
+                color: '#f8fafc',
+                marginBottom: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <Sparkles size={18} color="#818cf8" />
+              Chế Độ Chấm Bài AI:
+            </label>
+            <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '12px' }}>
+              Chọn phương thức chấm bài thi tự luận môn Toán.
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              {/* Option 1: 3 Models Consensus */}
+              <button
+                type="button"
+                onClick={() => setCurrent({ ...current, gradingMode: 'triple_consensus' })}
+                style={{
+                  padding: '14px',
+                  borderRadius: 'var(--radius-md)',
+                  border:
+                    current.gradingMode === 'triple_consensus'
+                      ? '2px solid #818cf8'
+                      : '1px solid var(--border-subtle)',
+                  background:
+                    current.gradingMode === 'triple_consensus'
+                      ? 'rgba(99, 102, 241, 0.16)'
+                      : 'rgba(255, 255, 255, 0.03)',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow:
+                    current.gradingMode === 'triple_consensus'
+                      ? '0 0 16px rgba(99, 102, 241, 0.25)'
+                      : 'none',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '6px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Layers size={16} color="#818cf8" />
+                    <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.88rem' }}>
+                      Đối Chiếu 3 Model AI
+                    </span>
+                  </div>
+                  <span className="badge badge-emerald" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
+                    Khuyên dùng
+                  </span>
+                </div>
+                <p style={{ fontSize: '0.75rem', color: '#cbd5e1', lineHeight: 1.4 }}>
+                  Chạy song song <strong>Gemini + Claude + GPT-4o</strong> cùng prompt & rubric. Tự động so sánh và <strong>tự động chấm lại</strong> nếu phát hiện lệch điểm để kết quả luôn công tâm, chính xác nhất.
+                </p>
+              </button>
+
+              {/* Option 2: Single Model */}
+              <button
+                type="button"
+                onClick={() => setCurrent({ ...current, gradingMode: 'single' })}
+                style={{
+                  padding: '14px',
+                  borderRadius: 'var(--radius-md)',
+                  border:
+                    current.gradingMode === 'single'
+                      ? '2px solid #06b6d4'
+                      : '1px solid var(--border-subtle)',
+                  background:
+                    current.gradingMode === 'single'
+                      ? 'rgba(6, 182, 212, 0.16)'
+                      : 'rgba(255, 255, 255, 0.03)',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                  <Bot size={16} color="#06b6d4" />
+                  <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.88rem' }}>
+                    Chấm 1 Model duy nhất
+                  </span>
+                </div>
+                <p style={{ fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.4 }}>
+                  Chỉ gọi 1 nhà cung cấp đã chọn bên dưới (tiết kiệm token, phản hồi nhanh hơn).
+                </p>
+              </button>
+            </div>
+
+            {/* Sub-settings for Queue & Consensus */}
+            {current.gradingMode === 'triple_consensus' && (
+              <div
+                style={{
+                  marginTop: '12px',
+                  padding: '14px',
+                  background: 'rgba(15, 23, 42, 0.5)',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-subtle)',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '12px',
+                }}
+              >
+                <div>
+                  <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                    Giãn cách hàng đợi:
+                  </label>
+                  <select
+                    className="input-field"
+                    style={{ padding: '6px 8px', fontSize: '0.8rem' }}
+                    value={current.queueDelayMs ?? 2000}
+                    onChange={(e) => setCurrent({ ...current, queueDelayMs: Number(e.target.value) })}
+                  >
+                    <option value={1500}>1.5 giây / bài</option>
+                    <option value={2000}>2.0 giây / bài (Chuẩn)</option>
+                    <option value={3000}>3.0 giây / bài</option>
+                    <option value={4000}>4.0 giây / bài</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                    Ngưỡng lệch điểm chấm lại:
+                  </label>
+                  <select
+                    className="input-field"
+                    style={{ padding: '6px 8px', fontSize: '0.8rem' }}
+                    value={current.consensusTolerance ?? 0.25}
+                    onChange={(e) => setCurrent({ ...current, consensusTolerance: Number(e.target.value) })}
+                  >
+                    <option value={0.1}>&gt; 0.10 điểm (Rất nhạy)</option>
+                    <option value={0.25}>&gt; 0.25 điểm (Chuẩn)</option>
+                    <option value={0.5}>&gt; 0.50 điểm (Thoáng)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                    Số lần chấm lại tối đa:
+                  </label>
+                  <select
+                    className="input-field"
+                    style={{ padding: '6px 8px', fontSize: '0.8rem' }}
+                    value={current.maxRegradeRetries ?? 2}
+                    onChange={(e) => setCurrent({ ...current, maxRegradeRetries: Number(e.target.value) })}
+                  >
+                    <option value={1}>1 lần</option>
+                    <option value={2}>2 lần (Chuẩn)</option>
+                    <option value={3}>3 lần</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* AI Provider Switcher */}
           <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '18px' }}>
             <label
@@ -220,7 +390,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               }}
             >
               <Cpu size={18} color="#818cf8" />
-              Chọn Nhà Cung Cấp AI Chấm Bài:
+              {current.gradingMode === 'triple_consensus'
+                ? 'Cấu Hình 3 Model & API Key:'
+                : 'Chọn Nhà Cung Cấp AI Chấm Bài:'}
             </label>
 
             {/* Provider Tabs */}
@@ -359,6 +531,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 gap: '16px',
               }}
             >
+              {/* Reset to env.local helper banner */}
+              <div
+                style={{
+                  padding: '10px 14px',
+                  background: 'rgba(56, 189, 248, 0.08)',
+                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                  borderRadius: 'var(--radius-sm)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontSize: '0.8rem',
+                  color: '#bae6fd',
+                  gap: '10px',
+                }}
+              >
+                <span>
+                  💡 <strong>Gợi ý:</strong> Để trống các ô API Key nếu muốn hệ thống tự động dùng các API Key chuẩn đã khai báo sẵn trong file <code>.env.local</code>.
+                </span>
+                {(current.geminiApiKey || current.claudeApiKey || current.openaiApiKey) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrent({
+                        ...current,
+                        geminiApiKey: '',
+                        claudeApiKey: '',
+                        openaiApiKey: '',
+                      });
+                    }}
+                    className="btn btn-secondary"
+                    style={{ padding: '4px 10px', fontSize: '0.74rem', flexShrink: 0 }}
+                  >
+                    Xóa key trình duyệt (Dùng .env.local)
+                  </button>
+                )}
+              </div>
+
               {/* 1. GEMINI CONFIG */}
               {current.provider === 'gemini' && (
                 <>

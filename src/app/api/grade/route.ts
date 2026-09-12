@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { RubricData, StudentSubmission, TeacherSettings } from '@/types/grading';
-import { gradeWithProvider } from '@/utils/aiGrading';
+import { gradeWithProvider, gradeWithThreeModelsAndConsensus } from '@/utils/aiGrading';
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,18 +22,72 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const gradingMode = settings?.gradingMode || 'triple_consensus';
+
+    // Retrieve API keys from server env
+    const envGemini = (process.env.GEMINI_API_KEY || '').trim();
+    const envClaude = (process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '').trim();
+    const envOpenai = (process.env.OPENAI_API_KEY || '').trim();
+
+    // Client provided keys
+    const clientGemini = (req.headers.get('x-gemini-api-key') || settings?.geminiApiKey || '').trim();
+    const clientClaude = (req.headers.get('x-claude-api-key') || settings?.claudeApiKey || '').trim();
+    const clientOpenai = (req.headers.get('x-openai-api-key') || settings?.openaiApiKey || '').trim();
+
+    const geminiKey = clientGemini || envGemini;
+    const claudeKey = clientClaude || envClaude;
+    const openaiKey = clientOpenai || envOpenai;
+
+    // Server environment backup keys (used if client keys are invalid/malformed)
+    const backupKeys = {
+      gemini: envGemini && envGemini !== clientGemini ? envGemini : undefined,
+      claude: envClaude && envClaude !== clientClaude ? envClaude : undefined,
+      openai: envOpenai && envOpenai !== clientOpenai ? envOpenai : undefined,
+    };
+
+    // Mode 1: Triple-Model Consensus (Gemini + Claude + OpenAI)
+    if (gradingMode === 'triple_consensus') {
+      const availableKeys = {
+        gemini: geminiKey,
+        claude: claudeKey,
+        openai: openaiKey,
+      };
+
+      const keyCount = Object.values(availableKeys).filter(Boolean).length;
+      if (keyCount === 0) {
+        return NextResponse.json(
+          {
+            error:
+              'Chưa cấu hình API Key nào trong Cài Đặt hoặc .env.local (cần ít nhất API Key của Gemini, Claude hoặc OpenAI để chấm đối chiếu).',
+          },
+          { status: 400 }
+        );
+      }
+
+      const { gradingResult, consensusReport } = await gradeWithThreeModelsAndConsensus(
+        submission,
+        rubric,
+        settings,
+        availableKeys,
+        backupKeys
+      );
+
+      return NextResponse.json({
+        success: true,
+        gradingResult,
+        consensusReport,
+        mode: 'triple_consensus',
+      });
+    }
+
+    // Mode 2: Single model provider
     const provider = settings?.provider || 'claude';
     let apiKey = '';
+    let backupApiKey: string | undefined = undefined;
 
     if (provider === 'claude') {
-      apiKey = (
-        req.headers.get('x-claude-api-key') ||
-        settings?.claudeApiKey ||
-        process.env.ANTHROPIC_API_KEY ||
-        process.env.CLAUDE_API_KEY ||
-        ''
-      ).trim();
-
+      apiKey = claudeKey;
+      backupApiKey = backupKeys.claude;
       if (!apiKey) {
         return NextResponse.json(
           {
@@ -44,13 +98,8 @@ export async function POST(req: NextRequest) {
         );
       }
     } else if (provider === 'openai') {
-      apiKey = (
-        req.headers.get('x-openai-api-key') ||
-        settings?.openaiApiKey ||
-        process.env.OPENAI_API_KEY ||
-        ''
-      ).trim();
-
+      apiKey = openaiKey;
+      backupApiKey = backupKeys.openai;
       if (!apiKey) {
         return NextResponse.json(
           {
@@ -61,14 +110,8 @@ export async function POST(req: NextRequest) {
         );
       }
     } else {
-      // Gemini
-      apiKey = (
-        req.headers.get('x-gemini-api-key') ||
-        settings?.geminiApiKey ||
-        process.env.GEMINI_API_KEY ||
-        ''
-      ).trim();
-
+      apiKey = geminiKey;
+      backupApiKey = backupKeys.gemini;
       if (!apiKey) {
         return NextResponse.json(
           {
@@ -84,7 +127,8 @@ export async function POST(req: NextRequest) {
       submission,
       rubric,
       settings,
-      apiKey
+      apiKey,
+      backupApiKey
     );
 
     return NextResponse.json({

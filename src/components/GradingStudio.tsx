@@ -16,6 +16,10 @@ import {
   Save,
   MessageSquare,
   TrendingUp,
+  Layers,
+  RefreshCw,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { StudentSubmission, GradingResult, TeacherSettings, RubricData } from '@/types/grading';
 import { ImageViewer } from './ImageViewer';
@@ -41,6 +45,7 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
   const [isExporting, setIsExporting] = useState(false);
   const [isEditingComment, setIsEditingComment] = useState(false);
   const [isEditingGeneralComment, setIsEditingGeneralComment] = useState(false);
+  const [showConsensusDetails, setShowConsensusDetails] = useState(true);
 
   if (!result) {
     return (
@@ -299,6 +304,193 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
               </button>
             )}
           </div>
+
+          {/* BẢNG ĐỐI CHIẾU 3 MODEL AI (NẾU CÓ BÁO CÁO CONSENSUS) */}
+          {result.consensusReport && (
+            <div
+              className="glass-panel"
+              style={{
+                padding: '18px 20px',
+                background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.85))',
+                border: '1px solid rgba(99, 102, 241, 0.35)',
+                boxShadow: '0 4px 20px rgba(99, 102, 241, 0.1)',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '10px',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setShowConsensusDetails(!showConsensusDetails)}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Sparkles size={18} color="#818cf8" />
+                  <h3 style={{ fontSize: '0.96rem', fontWeight: 700, color: '#f8fafc' }}>
+                    Bảng Đối Chiếu Điểm 3 Model AI (Gemini + Claude + GPT-4o)
+                  </h3>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {result.consensusReport.status === 'unanimous' && (
+                    <span className="badge badge-emerald" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
+                      <CheckCircle size={12} /> Đồng thuận tuyệt đối (3/3)
+                    </span>
+                  )}
+                  {result.consensusReport.status === 'majority' && (
+                    <span className="badge badge-amber" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
+                      <Layers size={12} /> Đồng thuận đa số (2/3)
+                    </span>
+                  )}
+                  {result.consensusReport.status === 'resolved_after_retry' && (
+                    <span className="badge badge-indigo" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
+                      <RefreshCw size={12} /> Đã chấm lại {result.consensusReport.regradeCount} lần
+                    </span>
+                  )}
+                  {result.consensusReport.status === 'conflict' && (
+                    <span className="badge badge-rose" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
+                      <AlertTriangle size={12} /> Lệch {result.consensusReport.scoreDifference}đ
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: '4px', borderRadius: '50%' }}
+                  >
+                    {showConsensusDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Summary note */}
+              <p style={{ fontSize: '0.82rem', color: '#cbd5e1', lineHeight: 1.5, marginBottom: showConsensusDetails ? '14px' : '0' }}>
+                {result.consensusReport.summary}
+              </p>
+
+              {/* Comparison Table */}
+              {showConsensusDetails && (
+                <div style={{ overflowX: 'auto', marginTop: '10px' }}>
+                  <table
+                    style={{
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      fontSize: '0.8rem',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                        <th style={{ padding: '8px 10px', fontWeight: 600 }}>Tiêu chí thang điểm</th>
+                        {result.consensusReport.evaluations.map((ev, idx) => (
+                          <th key={idx} style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'center' }}>
+                            {ev.provider.toUpperCase()} ({ev.modelName.split('-').slice(0, 2).join('-')})
+                          </th>
+                        ))}
+                        <th
+                          style={{
+                            padding: '8px 10px',
+                            fontWeight: 700,
+                            textAlign: 'center',
+                            color: '#34d399',
+                            background: 'rgba(52, 211, 153, 0.08)',
+                          }}
+                        >
+                          Điểm Đồng Thuận
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rubric.criteria.map((c) => {
+                        const agreedPoints =
+                          result.criteriaBreakdown?.find((item) => item.criterionId === c.id)
+                            ?.awardedPoints ?? 0;
+
+                        return (
+                          <tr
+                            key={c.id}
+                            style={{
+                              borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                            }}
+                          >
+                            <td style={{ padding: '8px 10px', color: '#f1f5f9' }}>
+                              <span style={{ fontWeight: 600 }}>{c.name}</span>{' '}
+                              <span style={{ color: 'var(--text-muted)' }}>({c.points}đ)</span>
+                            </td>
+
+                            {result.consensusReport?.evaluations.map((ev, evIdx) => {
+                              const p = ev.awardedPointsByCriterion[c.id] ?? 0;
+                              const isMatch = Math.abs(p - agreedPoints) <= 0.05;
+
+                              return (
+                                <td
+                                  key={evIdx}
+                                  style={{
+                                    padding: '8px 10px',
+                                    textAlign: 'center',
+                                    fontWeight: isMatch ? 600 : 400,
+                                    color: isMatch ? '#f8fafc' : '#fbbf24',
+                                  }}
+                                >
+                                  {p}đ
+                                </td>
+                              );
+                            })}
+
+                            <td
+                              style={{
+                                padding: '8px 10px',
+                                textAlign: 'center',
+                                fontWeight: 700,
+                                color: '#34d399',
+                                background: 'rgba(52, 211, 153, 0.08)',
+                              }}
+                            >
+                              {agreedPoints}đ
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {/* Total row */}
+                      <tr style={{ borderTop: '2px solid rgba(255, 255, 255, 0.1)', background: 'rgba(0,0,0,0.2)' }}>
+                        <td style={{ padding: '10px', fontWeight: 700, color: '#f8fafc' }}>
+                          TỔNG ĐIỂM
+                        </td>
+                        {result.consensusReport.evaluations.map((ev, idx) => (
+                          <td
+                            key={idx}
+                            style={{
+                              padding: '10px',
+                              textAlign: 'center',
+                              fontWeight: 700,
+                              color: '#cbd5e1',
+                            }}
+                          >
+                            {ev.score}đ
+                          </td>
+                        ))}
+                        <td
+                          style={{
+                            padding: '10px',
+                            textAlign: 'center',
+                            fontWeight: 800,
+                            fontSize: '0.95rem',
+                            color: '#34d399',
+                            background: 'rgba(52, 211, 153, 0.15)',
+                          }}
+                        >
+                          {result.score}đ
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 1. NHẬN XÉT CHUNG */}
           <div

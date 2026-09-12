@@ -5,6 +5,9 @@ import {
   StudentSubmission,
   TeacherSettings,
   AIProvider,
+  ModelEvaluation,
+  ConsensusReport,
+  CriterionResult,
 } from '@/types/grading';
 import { buildGradingPrompt } from './promptBuilder';
 
@@ -143,7 +146,8 @@ export async function gradeWithGemini(
   submission: StudentSubmission,
   rubric: RubricData,
   settings: TeacherSettings,
-  apiKey: string
+  apiKey: string,
+  backupApiKey?: string
 ): Promise<{ gradingResult: GradingResult; modelUsed: string }> {
   if (!apiKey) {
     throw new Error(
@@ -204,10 +208,22 @@ export async function gradeWithGemini(
     } catch (err: any) {
       console.warn(`Gemini model ${m} failed (${err.message || err}), trying next candidate...`);
       lastError = err;
+      const isKeyInvalid = /api_key_invalid|api key not valid/i.test(err.message || '');
+      if (isKeyInvalid && backupApiKey && backupApiKey !== apiKey) {
+        console.warn('[Gemini] Key trình duyệt không hợp lệ. Đang tự động chuyển sang server backup key từ .env.local...');
+        return gradeWithGemini(submission, rubric, settings, backupApiKey);
+      }
+      if (isKeyInvalid) {
+        break;
+      }
     }
   }
 
   if (!response) {
+    const rawMsg = lastError?.message || '';
+    if (/api_key_invalid|api key not valid/i.test(rawMsg)) {
+      throw new Error('Google Gemini: API Key không hợp lệ hoặc đã bị khóa/hết hạn.');
+    }
     throw lastError || new Error('Không thể kết nối đến mô hình Google Gemini.');
   }
 
@@ -225,7 +241,8 @@ export async function gradeWithClaude(
   submission: StudentSubmission,
   rubric: RubricData,
   settings: TeacherSettings,
-  apiKey: string
+  apiKey: string,
+  backupApiKey?: string
 ): Promise<{ gradingResult: GradingResult; modelUsed: string }> {
   if (!apiKey) {
     throw new Error(
@@ -316,6 +333,13 @@ export async function gradeWithClaude(
     } catch {
       // ignore
     }
+    if ((response.status === 401 || /invalid x-api-key/i.test(errorDetail)) && backupApiKey && backupApiKey !== apiKey) {
+      console.warn('[Claude] Key trình duyệt không hợp lệ (401). Đang tự động chuyển sang server backup key từ .env.local...');
+      return gradeWithClaude(submission, rubric, settings, backupApiKey);
+    }
+    if (response.status === 401 || /invalid x-api-key/i.test(errorDetail)) {
+      throw new Error('Anthropic Claude: API Key không hợp lệ hoặc đã hết hạn (401 Unauthorized).');
+    }
     throw new Error(`Lỗi từ Claude API (${response.status}): ${errorDetail}`);
   }
 
@@ -339,7 +363,8 @@ export async function gradeWithOpenAI(
   submission: StudentSubmission,
   rubric: RubricData,
   settings: TeacherSettings,
-  apiKey: string
+  apiKey: string,
+  backupApiKey?: string
 ): Promise<{ gradingResult: GradingResult; modelUsed: string }> {
   if (!apiKey) {
     throw new Error(
@@ -429,6 +454,16 @@ export async function gradeWithOpenAI(
     } catch {
       // ignore
     }
+    if ((response.status === 401 || /invalid api key|incorrect api key/i.test(errorDetail)) && backupApiKey && backupApiKey !== apiKey) {
+      console.warn('[OpenAI] Key trình duyệt không hợp lệ. Đang tự động chuyển sang server backup key từ .env.local...');
+      return gradeWithOpenAI(submission, rubric, settings, backupApiKey);
+    }
+    if (/credit_balance_exhausted|insufficient_quota|you have no credits/i.test(errorDetail)) {
+      throw new Error('OpenAI: Tài khoản hết số dư / hạn mức (Credit balance exhausted).');
+    }
+    if (response.status === 401 || /invalid api key|incorrect api key/i.test(errorDetail)) {
+      throw new Error('OpenAI: API Key không hợp lệ (401 Unauthorized).');
+    }
     throw new Error(`Lỗi từ OpenAI / OpenAPI (${response.status}): ${errorDetail}`);
   }
 
@@ -448,7 +483,8 @@ export async function gradeWithProvider(
   submission: StudentSubmission,
   rubric: RubricData,
   settings: TeacherSettings,
-  resolvedApiKey: string
+  resolvedApiKey: string,
+  backupApiKey?: string
 ): Promise<{ gradingResult: GradingResult; provider: AIProvider; modelUsed: string }> {
   const provider = settings.provider || 'claude';
 
@@ -458,7 +494,8 @@ export async function gradeWithProvider(
         submission,
         rubric,
         settings,
-        resolvedApiKey
+        resolvedApiKey,
+        backupApiKey
       );
       return { gradingResult, provider: 'claude', modelUsed };
     }
@@ -467,7 +504,8 @@ export async function gradeWithProvider(
         submission,
         rubric,
         settings,
-        resolvedApiKey
+        resolvedApiKey,
+        backupApiKey
       );
       return { gradingResult, provider: 'openai', modelUsed };
     }
@@ -477,9 +515,402 @@ export async function gradeWithProvider(
         submission,
         rubric,
         settings,
-        resolvedApiKey
+        resolvedApiKey,
+        backupApiKey
       );
       return { gradingResult, provider: 'gemini', modelUsed };
     }
   }
 }
+
+/**
+ * Convert a GradingResult to a ModelEvaluation structure for cross-checking
+ */
+export function toModelEvaluation(
+  provider: AIProvider,
+  modelName: string,
+  res: GradingResult
+): ModelEvaluation {
+  const awardedPointsByCriterion: Record<string, number> = {};
+  const reasonsByCriterion: Record<string, string> = {};
+  const isCorrectByCriterion: Record<string, 'full' | 'partial' | 'wrong'> = {};
+
+  for (const c of res.criteriaBreakdown || []) {
+    awardedPointsByCriterion[c.criterionId] = Number(c.awardedPoints ?? 0);
+    reasonsByCriterion[c.criterionId] = c.reason || '';
+    isCorrectByCriterion[c.criterionId] = c.isCorrect || 'wrong';
+  }
+
+  return {
+    provider,
+    modelName,
+    score: res.score,
+    maxScore: res.maxScore,
+    awardedPointsByCriterion,
+    reasonsByCriterion,
+    isCorrectByCriterion,
+    generalComment: res.generalComment,
+    strengths: res.strengths,
+    weaknesses: res.weaknesses,
+    teacherComment: res.teacherComment,
+  };
+}
+
+/**
+ * Grade using 3 AI models (Gemini, Claude, OpenAI) simultaneously with the same prompt,
+ * cross-check results against each other, and automatically re-grade if scores diverge.
+ */
+export async function gradeWithThreeModelsAndConsensus(
+  submission: StudentSubmission,
+  rubric: RubricData,
+  settings: TeacherSettings,
+  apiKeys: {
+    gemini?: string;
+    claude?: string;
+    openai?: string;
+  },
+  backupKeys?: {
+    gemini?: string;
+    claude?: string;
+    openai?: string;
+  }
+): Promise<{ gradingResult: GradingResult; consensusReport: ConsensusReport }> {
+  const tolerance = settings.consensusTolerance ?? 0.25;
+  const maxRetries = settings.maxRegradeRetries ?? 2;
+
+  let roundCount = 1;
+  let regradeCount = 0;
+  let finalEvaluations: ModelEvaluation[] = [];
+  let modelResults: { provider: AIProvider; result: GradingResult; model: string }[] = [];
+
+  // Helper to run all 3 models in parallel with identical prompt and settings
+  const runTripleEvaluation = async () => {
+    const tasks: Promise<{ provider: AIProvider; result: GradingResult; model: string }>[] = [];
+
+    // 1. Google Gemini (Model 1)
+    if (apiKeys.gemini) {
+      tasks.push(
+        gradeWithGemini(submission, rubric, settings, apiKeys.gemini, backupKeys?.gemini).then(
+          ({ gradingResult, modelUsed }) => ({
+            provider: 'gemini' as AIProvider,
+            result: gradingResult,
+            model: modelUsed,
+          })
+        )
+      );
+    }
+
+    // 2. Anthropic Claude (Model 2)
+    if (apiKeys.claude) {
+      tasks.push(
+        gradeWithClaude(submission, rubric, settings, apiKeys.claude, backupKeys?.claude).then(
+          ({ gradingResult, modelUsed }) => ({
+            provider: 'claude' as AIProvider,
+            result: gradingResult,
+            model: modelUsed,
+          })
+        )
+      );
+    }
+
+    // 3. OpenAI GPT (Model 3) - Có tự động dự phòng sang Gemini 3.7/3.6 nếu OpenAI hết hạn mức (429)
+    if (apiKeys.openai) {
+      tasks.push(
+        gradeWithOpenAI(submission, rubric, settings, apiKeys.openai, backupKeys?.openai)
+          .then(({ gradingResult, modelUsed }) => ({
+            provider: 'openai' as AIProvider,
+            result: gradingResult,
+            model: modelUsed,
+          }))
+          .catch(async (openAiErr) => {
+            // Khi OpenAI báo 429 (You have no credits remaining) hoặc lỗi key
+            const geminiKeyToUse = backupKeys?.gemini || apiKeys.gemini;
+            if (geminiKeyToUse) {
+              console.warn(
+                `[Consensus fallback] OpenAI gặp lỗi (${openAiErr.message}). Tự động dùng Gemini 3.7 Flash làm Model thứ 3.`
+              );
+              const fallbackSettings: TeacherSettings = {
+                ...settings,
+                geminiModel: 'gemini-3.7-flash',
+              };
+              const { gradingResult, modelUsed } = await gradeWithGemini(
+                submission,
+                rubric,
+                fallbackSettings,
+                geminiKeyToUse,
+                backupKeys?.gemini
+              );
+              return {
+                provider: 'gemini' as AIProvider,
+                result: gradingResult,
+                model: `${modelUsed} (Dự phòng cho OpenAI)`,
+              };
+            }
+            throw openAiErr;
+          })
+      );
+    } else if (apiKeys.gemini) {
+      // Nếu không có OpenAI key, chạy Gemini 3.7 Flash làm Model thứ 3
+      const fallbackSettings: TeacherSettings = {
+        ...settings,
+        geminiModel: 'gemini-3.7-flash',
+      };
+      tasks.push(
+        gradeWithGemini(submission, rubric, fallbackSettings, apiKeys.gemini, backupKeys?.gemini).then(
+          ({ gradingResult, modelUsed }) => ({
+            provider: 'gemini' as AIProvider,
+            result: gradingResult,
+            model: `${modelUsed} (Model 3)`,
+          })
+        )
+      );
+    }
+
+    if (tasks.length === 0) {
+      throw new Error(
+        'Chưa cấu hình API Key nào (Gemini, Claude, hoặc OpenAI) để thực hiện đối chiếu 3 model.'
+      );
+    }
+
+    const settled = await Promise.allSettled(tasks);
+    const successful: { provider: AIProvider; result: GradingResult; model: string }[] = [];
+    const errors: string[] = [];
+
+    settled.forEach((res) => {
+      if (res.status === 'fulfilled') {
+        successful.push(res.value);
+      } else {
+        const rawMsg = res.reason?.message || 'Lỗi không xác định';
+        let formatted = rawMsg;
+        if (/api_key_invalid|api key not valid/i.test(rawMsg)) {
+          formatted = 'Gemini: API Key không hợp lệ hoặc đã bị khóa/hết hạn';
+        } else if (/invalid x-api-key|401/i.test(rawMsg)) {
+          formatted = 'Claude: API Key không hợp lệ hoặc đã hết hạn (401 Unauthorized)';
+        } else if (/credit_balance_exhausted|insufficient_quota|you have no credits/i.test(rawMsg)) {
+          formatted = 'OpenAI: Tài khoản hết số dư / hạn mức (Credit balance exhausted)';
+        }
+        errors.push(formatted);
+      }
+    });
+
+    if (successful.length === 0) {
+      const uniqueErrors = Array.from(new Set(errors));
+      throw new Error(
+        `Tất cả các model AI đều thất bại: ${uniqueErrors.join(' | ')}. (Gợi ý: Nếu bạn có cấu hình key trong .env.local, hãy vào Cài Đặt -> Xóa key trình duyệt để hệ thống tự nhận key chuẩn).`
+      );
+    }
+
+    // Nếu chỉ có 1 hoặc 2 model thành công nhưng cần đủ 3 kết quả để đối chiếu:
+    // Nếu có key Gemini, bổ sung thêm model Gemini khác (gemini-3.7-flash / gemini-3.6-flash / gemini-flash-latest) để luôn đủ 3 model!
+    const effectiveGeminiKey = backupKeys?.gemini || apiKeys.gemini;
+    if (successful.length < 3 && effectiveGeminiKey) {
+      const needed = 3 - successful.length;
+      const extraCandidates = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-flash-latest'];
+      for (let i = 0; i < needed; i++) {
+        const fallbackM = extraCandidates[i] || 'gemini-3.6-flash';
+        try {
+          const fallbackSettings: TeacherSettings = {
+            ...settings,
+            geminiModel: fallbackM,
+          };
+          const { gradingResult, modelUsed } = await gradeWithGemini(
+            submission,
+            rubric,
+            fallbackSettings,
+            effectiveGeminiKey,
+            backupKeys?.gemini
+          );
+          successful.push({
+            provider: 'gemini',
+            result: gradingResult,
+            model: `${modelUsed} (Bổ sung)`,
+          });
+        } catch (e) {
+          // ignore extra fallback errors
+        }
+      }
+    }
+
+    return successful;
+  };
+
+  // Run initial round
+  modelResults = await runTripleEvaluation();
+  finalEvaluations = modelResults.map((r) => toModelEvaluation(r.provider, r.model, r.result));
+
+  // Helper to calculate maximum score spread
+  const getScoreDiff = (evals: ModelEvaluation[]) => {
+    if (evals.length <= 1) return 0;
+    const scores = evals.map((e) => e.score);
+    return Math.max(...scores) - Math.min(...scores);
+  };
+
+  // Re-grade loop: If scores or criteria diverge beyond tolerance, trigger re-grading
+  while (regradeCount < maxRetries) {
+    const diff = getScoreDiff(finalEvaluations);
+
+    // Check if any major criterion has strong conflict (e.g., > 50% points divergence)
+    let hasCriterionConflict = false;
+    if (finalEvaluations.length >= 2) {
+      for (const crit of rubric.criteria) {
+        const critScores = finalEvaluations.map(
+          (e) => e.awardedPointsByCriterion[crit.id] ?? 0
+        );
+        const critDiff = Math.max(...critScores) - Math.min(...critScores);
+        if (critDiff > crit.points * 0.5 && critDiff > 0.2) {
+          hasCriterionConflict = true;
+          break;
+        }
+      }
+    }
+
+    // If models are within agreement threshold, consensus is achieved
+    if (diff <= tolerance && !hasCriterionConflict) {
+      break;
+    }
+
+    // Difference detected -> trigger re-grade!
+    regradeCount++;
+    roundCount++;
+    console.log(
+      `[Consensus] Vòng ${roundCount - 1} phát hiện chênh lệch ${diff.toFixed(2)}đ (> ${tolerance}đ) hoặc xung đột tiêu chí. Tiến hành chấm lại (Lần ${regradeCount}/${maxRetries})...`
+    );
+
+    try {
+      const newResults = await runTripleEvaluation();
+      if (newResults.length > 0) {
+        modelResults = newResults;
+        finalEvaluations = modelResults.map((r) =>
+          toModelEvaluation(r.provider, r.model, r.result)
+        );
+      }
+    } catch (retryErr) {
+      console.warn('[Consensus] Gặp lỗi trong lần chấm lại:', retryErr);
+      break;
+    }
+  }
+
+  // Determine final consensus status
+  const scoreDiff = Number(getScoreDiff(finalEvaluations).toFixed(2));
+  let consensusStatus: ConsensusReport['status'] = 'unanimous';
+
+  if (regradeCount > 0) {
+    consensusStatus = scoreDiff <= tolerance ? 'resolved_after_retry' : 'conflict';
+  } else if (scoreDiff > 0.05) {
+    consensusStatus = scoreDiff <= tolerance ? 'majority' : 'conflict';
+  } else {
+    consensusStatus = 'unanimous';
+  }
+
+  // Synthesize consensus criteria points and explanations
+  const synthesizedCriteria: CriterionResult[] = rubric.criteria.map((c) => {
+    const pointsList = finalEvaluations.map(
+      (e) => e.awardedPointsByCriterion[c.id] ?? 0
+    );
+
+    let consensusPoint = 0;
+    if (pointsList.length === 1) {
+      consensusPoint = pointsList[0];
+    } else if (pointsList.length === 2) {
+      if (Math.abs(pointsList[0] - pointsList[1]) <= 0.05) {
+        consensusPoint = pointsList[0];
+      } else {
+        consensusPoint = Math.min(pointsList[0], pointsList[1]);
+      }
+    } else {
+      // 3 models: median value gives consensus vote
+      const sorted = [...pointsList].sort((a, b) => a - b);
+      consensusPoint = sorted[1];
+    }
+
+    // Pick reasoning from the model agreeing with consensus point
+    let bestReason = '';
+    let isCorrect: 'full' | 'partial' | 'wrong' =
+      consensusPoint >= c.points
+        ? 'full'
+        : consensusPoint > 0
+        ? 'partial'
+        : 'wrong';
+
+    for (const ev of finalEvaluations) {
+      if (Math.abs((ev.awardedPointsByCriterion[c.id] ?? 0) - consensusPoint) <= 0.05) {
+        if (ev.reasonsByCriterion[c.id]) {
+          bestReason = ev.reasonsByCriterion[c.id];
+          isCorrect = ev.isCorrectByCriterion[c.id] || isCorrect;
+          break;
+        }
+      }
+    }
+
+    if (!bestReason && finalEvaluations[0]) {
+      bestReason = finalEvaluations[0].reasonsByCriterion[c.id] || '';
+    }
+
+    return {
+      criterionId: c.id,
+      criterionName: c.name,
+      maxPoints: c.points,
+      awardedPoints: Number(consensusPoint.toFixed(2)),
+      isCorrect,
+      reason: bestReason,
+    };
+  });
+
+  const totalScore = Number(
+    synthesizedCriteria.reduce((sum, c) => sum + c.awardedPoints, 0).toFixed(2)
+  );
+  const maxScore = rubric.totalPoints;
+  const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+
+  // Best feedback text from agreeing models
+  const primaryResult =
+    modelResults.find(
+      (r) => Math.abs(r.result.score - totalScore) <= tolerance
+    )?.result || modelResults[0].result;
+
+  // Human-readable summary
+  const modelScoreDetails = finalEvaluations
+    .map((e) => `${e.provider.toUpperCase()} (${e.modelName}): ${e.score}đ`)
+    .join(', ');
+
+  let summaryText = '';
+  if (consensusStatus === 'unanimous') {
+    summaryText = `Đồng thuận tuyệt đối 3/3 Model (${modelScoreDetails}). Điểm chốt: ${totalScore}/${maxScore}đ.`;
+  } else if (consensusStatus === 'majority') {
+    summaryText = `Đồng thuận đa số 2/3 Model (Độ lệch: ${scoreDiff}đ | ${modelScoreDetails}). Điểm chốt: ${totalScore}/${maxScore}đ.`;
+  } else if (consensusStatus === 'resolved_after_retry') {
+    summaryText = `Đã tự động chấm lại ${regradeCount} lần để giải quyết bất đồng điểm số ban đầu. Điểm chốt đồng thuận: ${totalScore}/${maxScore}đ (${modelScoreDetails}).`;
+  } else {
+    summaryText = `Có sự phân kỳ giữa các Model sau ${regradeCount} lần chấm lại (Độ lệch: ${scoreDiff}đ | ${modelScoreDetails}). Đã chốt điểm trung vị tối ưu: ${totalScore}/${maxScore}đ.`;
+  }
+
+  const consensusReport: ConsensusReport = {
+    roundCount,
+    regradeCount,
+    status: consensusStatus,
+    modelsUsed: finalEvaluations.map((e) => `${e.provider} (${e.modelName})`),
+    scoreDifference: scoreDiff,
+    evaluations: finalEvaluations,
+    summary: summaryText,
+  };
+
+  const finalGradingResult: GradingResult = {
+    studentName: submission.studentName,
+    submissionId: submission.id,
+    score: totalScore,
+    maxScore,
+    percentage,
+    status: 'completed',
+    gradedAt: new Date().toISOString(),
+    generalComment: primaryResult.generalComment,
+    criteriaBreakdown: synthesizedCriteria,
+    strengths: primaryResult.strengths,
+    weaknesses: primaryResult.weaknesses,
+    correctionGuide: primaryResult.correctionGuide,
+    teacherComment: primaryResult.teacherComment,
+    consensusReport,
+  };
+
+  return { gradingResult: finalGradingResult, consensusReport };
+}
+

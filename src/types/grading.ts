@@ -22,6 +22,31 @@ export interface CriterionResult {
   reason: string; // Lồng ghép tiến trình + ưu/nhược điểm + căn cứ cho/trừ điểm
 }
 
+export interface ModelEvaluation {
+  provider: AIProvider;
+  modelName: string;
+  score: number;
+  maxScore: number;
+  awardedPointsByCriterion: Record<string, number>;
+  reasonsByCriterion: Record<string, string>;
+  isCorrectByCriterion: Record<string, 'full' | 'partial' | 'wrong'>;
+  generalComment?: string;
+  strengths?: string[];
+  weaknesses?: string[];
+  teacherComment?: string;
+  error?: string;
+}
+
+export interface ConsensusReport {
+  roundCount: number;
+  regradeCount: number;
+  status: 'unanimous' | 'majority' | 'resolved_after_retry' | 'conflict';
+  modelsUsed: string[];
+  scoreDifference: number;
+  evaluations: ModelEvaluation[];
+  summary: string;
+}
+
 export interface GradingResult {
   studentName: string;
   submissionId: string;
@@ -40,10 +65,15 @@ export interface GradingResult {
   correctionGuide: string; // 5. Hướng dẫn sửa bài và rút kinh nghiệm
   teacherComment: string; // Lời phê chân thật, ngắn gọn của Thầy/Cô
   
+  // Báo cáo đối chiếu 3 Model (nếu dùng chế độ Triple-Model Consensus)
+  consensusReport?: ConsensusReport;
+
   // Tương thích ngược nếu còn dữ liệu cũ
   stepByStepAnalysis?: string;
   knowledgeToReview?: string[];
 }
+
+export type SubmissionStatus = 'idle' | 'queued' | 'grading' | 'regrading' | 'done' | 'error';
 
 export interface StudentSubmission {
   id: string;
@@ -54,17 +84,26 @@ export interface StudentSubmission {
   images: string[]; // base64 data URLs
   extractedText?: string;
   gradingResult?: GradingResult;
-  status: 'idle' | 'grading' | 'done' | 'error';
+  status: SubmissionStatus;
   error?: string;
+  queuePosition?: number;
+  stepMessage?: string;
 }
 
 export type AIProvider = 'gemini' | 'claude' | 'openai';
+export type GradingMode = 'single' | 'triple_consensus';
 
 export interface TeacherSettings {
   role: 'thầy' | 'cô';
   teacherName: string;
   strictness: 'standard' | 'strict' | 'encouraging';
   provider: AIProvider;
+  gradingMode?: GradingMode; // 'triple_consensus' (mặc định) hoặc 'single'
+  
+  // Cấu hình Hàng đợi & Đối chiếu
+  queueDelayMs?: number; // Độ trễ giữa các bài trong hàng đợi (ms), mặc định 2000
+  maxRegradeRetries?: number; // Số lần tự động chấm lại khi lệch điểm, mặc định 2
+  consensusTolerance?: number; // Ngưỡng chênh lệch điểm tối đa chấp nhận được, mặc định 0.25
   
   // Google Gemini
   geminiApiKey: string;
@@ -83,3 +122,4 @@ export interface TeacherSettings {
   // Tương thích ngược với cấu hình cũ
   model?: string;
 }
+
