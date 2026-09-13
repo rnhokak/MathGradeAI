@@ -37,6 +37,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     provider: settings.provider || 'claude',
     strictness: settings.strictness || 'strict',
     gradingMode: settings.gradingMode || 'triple_consensus',
+    autoOcrBeforeGrading: settings.autoOcrBeforeGrading !== false,
     queueDelayMs: settings.queueDelayMs ?? 2000,
     maxRegradeRetries: settings.maxRegradeRetries ?? 2,
     consensusTolerance: settings.consensusTolerance ?? 0.25,
@@ -308,6 +309,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   Chỉ gọi 1 nhà cung cấp đã chọn bên dưới (tiết kiệm token, phản hồi nhanh hơn).
                 </p>
               </button>
+            </div>
+
+            {/* Auto-OCR 3 Model Toggle */}
+            <div
+              style={{
+                marginTop: '14px',
+                padding: '12px 14px',
+                background: 'rgba(99, 102, 241, 0.08)',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid rgba(99, 102, 241, 0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.86rem', color: '#f8fafc' }}>
+                    📐 Tự động đọc & đối chiếu công thức bằng 3 Model trước khi chấm
+                  </span>
+                  <span className="badge badge-emerald" style={{ fontSize: '0.65rem' }}>Khuyên dùng</span>
+                </div>
+                <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px', lineHeight: 1.4 }}>
+                  Khi bài làm có ảnh viết tay, hệ thống sẽ tự động dùng Gemini, Claude, GPT-4o để phiên âm từng dòng chữ, căn thức, số mũ sang LaTeX và hợp nhất trước khi chấm theo tiêu chí.
+                </p>
+              </div>
+
+              <input
+                type="checkbox"
+                checked={current.autoOcrBeforeGrading !== false}
+                onChange={(e) => setCurrent({ ...current, autoOcrBeforeGrading: e.target.checked })}
+                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#818cf8', flexShrink: 0 }}
+              />
             </div>
 
             {/* Sub-settings for Queue & Consensus */}

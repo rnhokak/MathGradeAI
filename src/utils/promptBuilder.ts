@@ -39,6 +39,107 @@ CHẾ ĐỘ CHẤM: CHUẨN KỲ THI (STANDARD)
 • Lời nhận xét: cân bằng, chuẩn mực sư phạm, vừa chỉ ra lỗi vừa ghi nhận điểm đúng.`;
 }
 
+/**
+ * Prompt for dedicated Handwritten Math OCR & LaTeX Transcription
+ */
+export function buildMathOcrPrompt(studentName?: string): string {
+  return `Bạn là một Chuyên gia số hóa và phiên âm tài liệu Toán học viết tay sang LaTeX chuẩn mực tại Việt Nam.
+Nhiệm vụ của bạn là đọc hình ảnh bài làm viết tay của học sinh ${studentName ? `"${studentName}"` : ''} và chuyển đổi chính xác 100% toàn bộ nội dung thành văn bản Markdown kết hợp công thức chuẩn LaTeX.
+
+═══════════════════════════════════════════════════════════
+CẢNH BÁO TỐI QUAN TRỌNG: CHỐNG THIÊN KIẾN TỰ ĐỘNG SỬA SAI
+═══════════════════════════════════════════════════════════
+• TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ ĐỘNG SỬA LỖI TOÁN HỌC CỦA HỌC SINH (ANTI AUTO-CORRECT BIAS):
+  - Học sinh rất thường xuyên viết SAI điều kiện xác định (ví dụ: viết "$x \\ge 0$" hoặc "$x \\geqslant 0$" thay vì "$x > 0$" do nhầm lẫn điều kiện căn thức với logarit, hoặc viết "$t > 0$" thay vì "$t \\ge 0$").
+  - Bạn TUYỆT ĐỐI KHÔNG ĐƯỢC tự động sửa thành "$x > 0$" theo lý thuyết sách giáo khoa!
+  - Nhiệm vụ của bạn là ghi lại CHÍNH XÁC 100% TỪNG NÉT MỰC THỰC TẾ HỌC SINH VIẾT TRÊN GIẤY.
+  - Việc nhận diện chính xác lỗi viết sai "$x \\ge 0$" của học sinh là CĂN CỨ SỐNG CÒN để giáo viên chấm bài trừ điểm theo đúng rubric!
+
+═══════════════════════════════════════════════════════════
+QUY TẮC SOI KÝ HIỆU & DẤU BẤT ĐẲNG THỨC VIẾT TAY
+═══════════════════════════════════════════════════════════
+1. QUAN SÁT TỪNG NÉT BÚT Ở CÁC DẤU SO SÁNH (>, >=, ⩾, <, <=, ⩽):
+   • Kiểm tra thật kỹ xem dưới dấu > hoặc < có bất kỳ nét gạch ngang hay nét gạch chéo/song song bên dưới không (học sinh Việt Nam thường viết dấu $\\geqslant$ gồm chữ > và một nét gạch bên dưới).
+   • Dù chỉ là một nét gạch phụ nhỏ bên dưới dấu > $\\rightarrow$ BẮT BUỘC PHẢI PHIÊN ÂM LÀ "$x \\ge 0$" hoặc "$x \\geqslant 0$". TUYỆT ĐỐI KHÔNG ĐƯỢC BỎ NÉT GẠCH ĐÓ THÀNH "$x > 0$".
+   • Chỉ ghi nhận "$x > 0$" khi và chỉ khi dưới dấu > TUYỆT ĐỐI TRỐNG RỖNG, không có bất kỳ nét gạch nào.
+   • ĐẶC BIỆT CHÚ Ý ĐIỀU KIỆN VIẾT BÊN CẠNH PHƯƠNG TRÌNH HOẶC TRONG DẤU NGOẶC: Học sinh rất hay ghi điều kiện trong dấu ngoặc nhọn hoặc ngoặc tròn bên cạnh phương trình như "< x ⩾ 0 >", "< x >= 0 >", "(x >= 0)". BẮT BUỘC giữ đúng dấu \\ge hoặc \\geqslant và cặp ngoặc, phiên âm thành "$< x \\ge 0 >$" (hoặc "$< x \\geqslant 0 >$"), TUYỆT ĐỐI KHÔNG ĐƯỢC sửa thành "x > 0".
+
+2. CÔNG THỨC VÀ KÝ HIỆU TOÁN (BẮT BUỘC DÙNG LATEX):
+   • Công thức trong dòng (inline): bọc bằng cặp dấu $ (ví dụ: $x \\ge 0$, $t = \\sqrt{\\log_5^2(x) + 1} \\ge 1$, $x = 5^2$).
+   • Biểu thức độc lập hoặc biến đổi nhiều dòng: dùng $$...$$ hoặc $$\\begin{aligned} ... \\end{aligned}$$.
+   • Phân số: dùng \\frac{a}{b}. Căn thức: dùng \\sqrt{...} hoặc \\sqrt[n]{...}.
+   • Số mũ và chỉ số dưới: dùng dấu ^ và _ (ví dụ: \\log_5^2(x), t^2 - t - 2 = 0, x_1, x_2).
+   • Ký hiệu so sánh và quan hệ: \\ge, \\geqslant, \\le, \\leqslant, >, <, =, \\ne, \\Leftrightarrow, \\Rightarrow.
+   • Tập hợp: S = \\{...\\}, \\in, \\notin, \\emptyset.
+
+3. PHÂN BIỆT RÕ CÁC KÝ TỰ VIẾT TAY DỄ NHẦM LẪN:
+   • Chữ "x" (biến số toán học) vs dấu nhân "\\times" hoặc dấu chấm "\\cdot".
+   • Chữ "z" vs số "2".
+   • Chữ "t" vs dấu cộng "+".
+   • Chữ "u" vs chữ "v" vs ký hiệu "\\nu".
+   • Số "1" vs chữ "l" vs dấu gạch đứng "|".
+   • Dấu trừ "-" vs gạch nối hay gạch ngang phân số.
+
+4. NGUYÊN TẮC PHIÊN ÂM TRUNG THỰC:
+   • Giữ nguyên toàn bộ tiến trình, câu chữ tiếng Việt mà học sinh trình bày (ví dụ: "Điều kiện xác định:", "Đặt $t = ...$", "Phương trình trở thành:", "Suy ra:", "Loại", "Thỏa mãn", "Vậy tập nghiệm...").
+   • KHÔNG TỰ Ý GIẢI BÀI, KHÔNG SỬA LỖI TOÁN HỌC CỦA HỌC SINH. Nếu học sinh viết sai (ví dụ tính $2 + 3 = 6$ hoặc sai điều kiện $x \\ge 0$), hãy chép đúng y nguyên những gì viết trên giấy.
+   • Nếu học sinh gạch bỏ hoặc gạch chéo một đoạn chữ/công thức, hãy ghi rõ: [Gạch bỏ: <nội dung gạch bỏ>].
+   • Nếu có ký tự hoặc từ bị mờ/mất nét không thể đọc được, hãy ghi [Không rõ nét].
+
+Hãy trả về toàn bộ bản phiên âm văn bản và công thức toán học một cách trực tiếp, rõ ràng, chia dòng mạch lạc theo đúng bài làm trên giấy.`;
+}
+
+/**
+ * Prompt to compare and reconcile 3 model OCR outputs against the original image
+ */
+export function buildOcrConsensusPrompt(
+  geminiText: string,
+  claudeText: string,
+  openaiText: string,
+  studentName?: string
+): string {
+  return `Bạn là Trọng tài AI chuyên gia thẩm định và đối chiếu văn bản Toán học viết tay.
+Dưới đây là kết quả phiên âm OCR từ 3 mô hình AI khác nhau (Google Gemini, Anthropic Claude, OpenAI GPT-4o) cho cùng một bài làm viết tay môn Toán của học sinh ${studentName ? `"${studentName}"` : ''}.
+
+=== KẾT QUẢ OCR TỪ MODEL 1 (Google Gemini) ===
+${geminiText || '(Không có kết quả)'}
+
+=== KẾT QUẢ OCR TỪ MODEL 2 (Anthropic Claude) ===
+${claudeText || '(Không có kết quả)'}
+
+=== KẾT QUẢ OCR TỪ MODEL 3 (OpenAI GPT-4o / Model 3) ===
+${openaiText || '(Không có kết quả)'}
+
+═══════════════════════════════════════════════════════════
+NHIỆM VỤ ĐỐI CHIẾU & HỢP NHẤT (CONSENSUS)
+═══════════════════════════════════════════════════════════
+1. Hãy so sánh từng dòng, từng công thức, từng ký hiệu toán học giữa 3 bản đọc trên cùng với hình ảnh gốc viết tay đính kèm.
+
+2. CẢNH BÁO ĐẶC BIỆT VỀ THIÊN KIẾN TỰ ĐỘNG SỬA SAI (AUTO-CORRECT BIAS):
+   • Các mô hình AI ngôn ngữ lớn thường bị thiên kiến "nghĩ thay học sinh" và tự động sửa $x \\ge 0$ thành $x > 0$ vì biết theo lý thuyết logarit cần $x > 0$.
+   • HÃY PHÓNG TO ẢNH ĐỂ ĐỐI CHIẾU TRỰC TIẾP VỚI NÉT BÚT THỰC TẾ:
+     Nếu trên ảnh nét mực học sinh viết có nét gạch ngang hoặc gạch xiên dưới dấu > (tức là dấu $\\ge$ hoặc $\\geqslant$, như $\\langle x \\ge 0 \\rangle$), BẮT BUỘC PHẢI CHỐT LÀ "$x \\ge 0$" (hoặc "$x \\geqslant 0$")!
+     TUYỆT ĐỐI KHÔNG ĐƯỢC CHẤP NHẬN bản đọc "$x > 0$" của model bị thiên kiến. Phát hiện học sinh viết sai điều kiện là căn cứ quan trọng nhất để giáo viên chấm điểm.
+
+3. Xác định các điểm khác biệt khác (nếu có) giữa 3 model:
+   • Khác biệt về ký hiệu: dấu so sánh (>, >=, >= vs >), số mũ, chỉ số dưới, biến số (x, t, z, 2).
+   • Khác biệt về dòng: có model nào đọc sót dòng biến đổi, điều kiện hoặc kết luận hay không.
+
+4. Tổng hợp thành bản "consensusText" hoàn hảo, chuẩn hóa LaTeX, giữ nguyên các bước làm trung thực của học sinh.
+
+Trả về kết quả dưới định dạng JSON duy nhất (không bọc text ngoài JSON):
+{
+  "consensusText": "Văn bản bài làm hoàn chỉnh nhất đã đối chiếu, chuẩn LaTeX $...$ và $$...$$",
+  "comparisonSummary": "Tóm tắt ngắn gọn (2-3 câu) về độ đồng thuận giữa 3 model (chỉ rõ đã xử lý các điểm sai lệch ra sao, ví dụ: 'Học sinh viết x >= 0 có nét gạch dưới, một số model bị thiên kiến đọc thành x > 0 nhưng bản hợp nhất đã giữ đúng x >= 0 theo nét mực thực tế')",
+  "hasDiscrepancies": boolean,
+  "discrepancies": [
+    "Mô tả điểm khác biệt 1 và cách đã giải quyết dựa trên ảnh...",
+    "Mô tả điểm khác biệt 2..."
+  ]
+}
+`;
+}
+
 export function buildGradingPrompt(
   rubric: RubricData,
   studentName: string,
@@ -71,8 +172,14 @@ ${rubric.criteria
   .join('\n')}
 
 === THÔNG TIN BÀI LÀM CỦA HỌC SINH ===
-${extractedSubmissionText ? `Văn bản/nội dung trích xuất từ bài làm:\n${extractedSubmissionText}\n` : ''}
-(Lưu ý: Nếu có hình ảnh đính kèm, đó là ảnh chụp bài làm viết tay thực tế của học sinh. Hãy đọc kỹ từng dòng chữ viết tay, từng phép biến đổi, điều kiện và kết luận của học sinh).
+${
+  extractedSubmissionText
+    ? `BẢN PHIÊN ÂM BÀI LÀM ĐÃ ĐỐI CHIẾU QUA CÁC MODEL AI (KÈM CÔNG THỨC LATEX CHUẨN XÁC):
+${extractedSubmissionText}
+
+(Lưu ý đặc biệt: Bản phiên âm trên đã được đối chiếu kỹ lưỡng từng ký tự, công thức LaTeX và các bước làm thực tế của học sinh. Hãy căn cứ vào văn bản này để đánh giá chính xác các bước giải, điều kiện và đáp số. Nếu có hình ảnh đính kèm, dùng hình ảnh để đối chiếu kiểm tra thêm về nét chữ hoặc hình vẽ nếu cần).`
+    : `(Bài làm dạng ảnh chụp viết tay đính kèm. Hãy đọc kỹ từng dòng chữ viết tay, từng phép biến đổi, điều kiện và kết luận của học sinh).`
+}
 
 ${buildStrictnessBlock(strictness)}
 

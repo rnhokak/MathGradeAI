@@ -162,9 +162,12 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
   };
 
   // Grade a single submission directly
+  // Grade a single submission directly
   const gradeSingleSubmission = async (sub: StudentSubmission) => {
     setActiveSubId(sub.id);
     const isTriple = (settings.gradingMode || 'triple_consensus') === 'triple_consensus';
+    const hasImages = sub.images && sub.images.length > 0;
+    const needsOcr = hasImages && (!sub.extractedText || !sub.ocrComparison) && settings.autoOcrBeforeGrading !== false;
 
     onUpdateSubmissions((prev) =>
       prev.map((s) =>
@@ -172,7 +175,9 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
           ? {
               ...s,
               status: 'grading',
-              stepMessage: isTriple
+              stepMessage: needsOcr
+                ? 'Bước 1/2: Đang đọc công thức 3 Model AI (Gemini, Claude, GPT-4o)...'
+                : isTriple
                 ? 'Đang chấm đồng thời 3 Model (Gemini, Claude, GPT-4o)...'
                 : 'Đang chấm AI...',
               error: undefined,
@@ -208,6 +213,8 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                 ...s,
                 status: 'done',
                 gradingResult: data.gradingResult,
+                extractedText: data.extractedText || s.extractedText,
+                ocrComparison: data.ocrComparison || s.ocrComparison,
                 stepMessage: undefined,
                 queuePosition: undefined,
                 error: undefined,
@@ -227,6 +234,74 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                 error: err.message || 'Lỗi không xác định',
                 stepMessage: undefined,
                 queuePosition: undefined,
+              }
+            : s
+        )
+      );
+      return false;
+    } finally {
+      setActiveSubId(null);
+    }
+  };
+
+  // Run OCR with 3 models on a single submission without immediate grading
+  const runOcrOnly = async (sub: StudentSubmission) => {
+    setActiveSubId(sub.id);
+    onUpdateSubmissions((prev) =>
+      prev.map((s) =>
+        s.id === sub.id
+          ? {
+              ...s,
+              status: 'ocr',
+              stepMessage: 'Đang đọc công thức bằng 3 Model AI (Gemini, Claude, GPT-4o)...',
+              error: undefined,
+            }
+          : s
+      )
+    );
+
+    try {
+      const res = await fetch('/api/ocr', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
+          ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
+          ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
+        },
+        body: JSON.stringify({
+          submission: sub,
+          settings,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Lỗi khi nhận diện công thức');
+
+      onUpdateSubmissions((prev) =>
+        prev.map((s) =>
+          s.id === sub.id
+            ? {
+                ...s,
+                status: s.gradingResult ? 'done' : 'idle',
+                extractedText: data.consensusText,
+                ocrComparison: data.ocrComparison,
+                stepMessage: undefined,
+              }
+            : s
+        )
+      );
+      return true;
+    } catch (err: any) {
+      console.error(`Error running OCR on ${sub.id}:`, err);
+      onUpdateSubmissions((prev) =>
+        prev.map((s) =>
+          s.id === sub.id
+            ? {
+                ...s,
+                status: 'error',
+                error: err.message || 'Lỗi nhận diện công thức',
+                stepMessage: undefined,
               }
             : s
         )
@@ -797,6 +872,34 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                       </span>
                     )}
 
+                    {sub.status === 'ocr' && (
+                      <span className="badge badge-indigo" style={{ padding: '5px 10px' }}>
+                        <RotateCw size={12} className="animate-spin" />{' '}
+                        {sub.stepMessage || 'Đang đọc công thức bằng 3 Model AI...'}
+                      </span>
+                    )}
+
+                    {(sub.ocrComparison || sub.gradingResult?.ocrComparison) && (
+                      <span
+                        className="badge"
+                        style={{
+                          background: 'rgba(6, 182, 212, 0.15)',
+                          color: '#06b6d4',
+                          border: '1px solid rgba(6, 182, 212, 0.3)',
+                          padding: '4px 8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                        title={
+                          (sub.ocrComparison || sub.gradingResult?.ocrComparison)?.comparisonSummary ||
+                          'Đã đối chiếu công thức bằng 3 Model AI'
+                        }
+                      >
+                        <FileCode size={11} /> 3-Model OCR
+                      </span>
+                    )}
+
                     {sub.status === 'grading' && (
                       <span className="badge badge-amber" style={{ padding: '5px 10px' }}>
                         <RotateCw size={12} className="animate-spin" />{' '}
@@ -881,6 +984,25 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
 
                   {/* Right: Actions */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {hasImages && !isGraded && (
+                      <button
+                        onClick={() => runOcrOnly(sub)}
+                        disabled={sub.status === 'grading' || sub.status === 'ocr' || sub.status === 'queued' || queueStatus === 'running'}
+                        className="btn btn-secondary"
+                        title="Đọc ảnh viết tay và chuyển thành công thức LaTeX bằng cả 3 model AI trước"
+                        style={{
+                          padding: '6px 10px',
+                          fontSize: '0.82rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        <FileCode size={13} color="#06b6d4" />
+                        {sub.status === 'ocr' ? 'Đang đọc...' : 'OCR 3 Model'}
+                      </button>
+                    )}
+
                     {isGraded ? (
                       <button
                         onClick={() => onSelectSubmissionToView(sub.id)}

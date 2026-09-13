@@ -68,13 +68,33 @@ export interface GradingResult {
   
   // Báo cáo đối chiếu 3 Model (nếu dùng chế độ Triple-Model Consensus)
   consensusReport?: ConsensusReport;
+  ocrComparison?: OcrComparisonReport;
 
   // Tương thích ngược nếu còn dữ liệu cũ
   stepByStepAnalysis?: string;
   knowledgeToReview?: string[];
 }
 
-export type SubmissionStatus = 'idle' | 'queued' | 'grading' | 'regrading' | 'done' | 'error';
+export interface OcrModelResult {
+  provider: AIProvider;
+  modelName: string;
+  transcription: string;
+  durationMs?: number;
+  error?: string;
+}
+
+export interface OcrComparisonReport {
+  status: 'unanimous' | 'majority' | 'reconciled' | 'single_model' | 'error';
+  modelsUsed: string[];
+  results: OcrModelResult[];
+  consensusText: string;
+  comparisonSummary: string;
+  hasDiscrepancies: boolean;
+  discrepancies?: string[];
+  arbitratedBy?: string;
+}
+
+export type SubmissionStatus = 'idle' | 'queued' | 'ocr' | 'grading' | 'regrading' | 'done' | 'error';
 
 export interface StudentSubmission {
   id: string;
@@ -84,6 +104,7 @@ export interface StudentSubmission {
   fileSize: number;
   images: string[]; // base64 data URLs
   extractedText?: string;
+  ocrComparison?: OcrComparisonReport;
   gradingResult?: GradingResult;
   status: SubmissionStatus;
   error?: string;
@@ -100,6 +121,7 @@ export interface TeacherSettings {
   strictness: 'standard' | 'strict' | 'encouraging';
   provider: AIProvider;
   gradingMode?: GradingMode; // 'triple_consensus' (mặc định) hoặc 'single'
+  autoOcrBeforeGrading?: boolean; // Tự động đọc và đối chiếu 3 model trước khi chấm (mặc định true)
   
   // Cấu hình Hàng đợi & Đối chiếu
   queueDelayMs?: number; // Độ trễ giữa các bài trong hàng đợi (ms), mặc định 2000

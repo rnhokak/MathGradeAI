@@ -76,6 +76,8 @@ export async function POST(req: NextRequest) {
         success: true,
         gradingResult,
         consensusReport,
+        ocrComparison: gradingResult.ocrComparison || submission.ocrComparison,
+        extractedText: submission.extractedText,
         mode: 'triple_consensus',
       });
     }
@@ -134,6 +136,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       gradingResult,
+      ocrComparison: gradingResult.ocrComparison || submission.ocrComparison,
+      extractedText: submission.extractedText,
       mode: provider,
       modelUsed,
     });

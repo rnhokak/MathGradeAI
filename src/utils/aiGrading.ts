@@ -8,8 +8,14 @@ import {
   ModelEvaluation,
   ConsensusReport,
   CriterionResult,
+  OcrModelResult,
+  OcrComparisonReport,
 } from '@/types/grading';
-import { buildGradingPrompt } from './promptBuilder';
+import {
+  buildGradingPrompt,
+  buildMathOcrPrompt,
+  buildOcrConsensusPrompt,
+} from './promptBuilder';
 
 /**
  * Robust JSON extractor from AI output that may contain markdown or surrounding text
@@ -140,6 +146,589 @@ export function buildGradingResult(
 }
 
 /**
+ * Transcribe math handwritten images using Google Gemini
+ */
+export async function transcribeImageWithGemini(
+  images: string[],
+  studentName: string,
+  settings: TeacherSettings,
+  apiKey: string,
+  backupApiKey?: string
+): Promise<{ transcription: string; modelUsed: string }> {
+  if (!apiKey) {
+    throw new Error(
+      'Chưa cấu hình Google Gemini API Key. Vui lòng vào Cài Đặt để nhập API Key, hoặc khai báo biến GEMINI_API_KEY trong file .env.local.'
+    );
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const contents: any[] = [];
+
+  for (const imgUrl of images) {
+    const match = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) {
+      contents.push({
+        inlineData: {
+          mimeType: match[1],
+          data: match[2],
+        },
+      });
+    }
+  }
+
+  const promptText = buildMathOcrPrompt(studentName);
+  contents.push(promptText);
+
+  const userModel = settings.geminiModel || settings.model || process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+  const cleanPreferred = userModel === 'gemini-2.5-flash' || userModel === 'gemini-2.0-flash' ? 'gemini-3.6-flash' : userModel;
+  const candidates = Array.from(
+    new Set([cleanPreferred, 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.7-flash'])
+  );
+
+  let response: any = null;
+  let modelUsed = cleanPreferred;
+  let lastError: any = null;
+
+  for (const m of candidates) {
+    try {
+      response = await ai.models.generateContent({
+        model: m,
+        contents,
+        config: {
+          temperature: 0.0,
+        },
+      });
+      modelUsed = m;
+      break;
+    } catch (err: any) {
+      lastError = err;
+      const isKeyInvalid = /api_key_invalid|api key not valid/i.test(err.message || '');
+      if (isKeyInvalid && backupApiKey && backupApiKey !== apiKey) {
+        return transcribeImageWithGemini(images, studentName, settings, backupApiKey);
+      }
+      if (isKeyInvalid) break;
+    }
+  }
+
+  if (!response) {
+    throw lastError || new Error('Không thể kết nối đến Gemini để nhận diện công thức toán.');
+  }
+
+  return {
+    transcription: (response.text || '').trim(),
+    modelUsed,
+  };
+}
+
+/**
+ * Transcribe math handwritten images using Anthropic Claude
+ */
+export async function transcribeImageWithClaude(
+  images: string[],
+  studentName: string,
+  settings: TeacherSettings,
+  apiKey: string,
+  backupApiKey?: string
+): Promise<{ transcription: string; modelUsed: string }> {
+  if (!apiKey) {
+    throw new Error('Chưa cấu hình Anthropic Claude API Key.');
+  }
+
+  const baseUrl = (
+    settings.claudeBaseUrl ||
+    process.env.CLAUDE_BASE_URL ||
+    'https://api.anthropic.com/v1'
+  ).replace(/\/+$/, '');
+  let model = settings.claudeModel || process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
+  const legacyClaudeModels = [
+    'claude-3-7-sonnet-20250219',
+    'claude-3-5-sonnet-20241022',
+    'claude-3-5-haiku-20241022',
+    'claude-3-opus-20240229',
+  ];
+  if (legacyClaudeModels.includes(model)) {
+    model = 'claude-sonnet-4-6';
+  }
+
+  const promptText = buildMathOcrPrompt(studentName);
+  const contentBlocks: any[] = [];
+
+  for (const imgUrl of images) {
+    const match = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) {
+      let mime = match[1].toLowerCase();
+      if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mime)) {
+        mime = 'image/jpeg';
+      }
+      contentBlocks.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: mime,
+          data: match[2],
+        },
+      });
+    }
+  }
+
+  contentBlocks.push({
+    type: 'text',
+    text: promptText,
+  });
+
+  const response = await fetch(`${baseUrl}/messages`, {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 4096,
+      temperature: 0.0,
+      messages: [
+        {
+          role: 'user',
+          content: contentBlocks,
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    let errorDetail = response.statusText;
+    try {
+      const errJson = await response.json();
+      errorDetail = errJson.error?.message || errJson.message || JSON.stringify(errJson);
+    } catch {}
+    if (
+      (response.status === 401 || /invalid x-api-key/i.test(errorDetail)) &&
+      backupApiKey &&
+      backupApiKey !== apiKey
+    ) {
+      return transcribeImageWithClaude(images, studentName, settings, backupApiKey);
+    }
+    throw new Error(`Claude OCR lỗi (${response.status}): ${errorDetail}`);
+  }
+
+  const data = await response.json();
+  const textOutput =
+    data.content
+      ?.filter((b: any) => b.type === 'text')
+      ?.map((b: any) => b.text)
+      ?.join('\n') || '';
+
+  return {
+    transcription: textOutput.trim(),
+    modelUsed: model,
+  };
+}
+
+/**
+ * Transcribe math handwritten images using OpenAI
+ */
+export async function transcribeImageWithOpenAI(
+  images: string[],
+  studentName: string,
+  settings: TeacherSettings,
+  apiKey: string,
+  backupApiKey?: string
+): Promise<{ transcription: string; modelUsed: string }> {
+  if (!apiKey) {
+    throw new Error('Chưa cấu hình OpenAI API Key.');
+  }
+
+  const baseUrl = (
+    settings.openaiBaseUrl ||
+    process.env.OPENAI_BASE_URL ||
+    'https://api.openai.com/v1'
+  ).replace(/\/+$/, '');
+  const model = settings.openaiModel || process.env.OPENAI_MODEL || 'gpt-4o';
+  const promptText = buildMathOcrPrompt(studentName);
+
+  const userContents: any[] = [
+    {
+      type: 'text',
+      text: promptText,
+    },
+  ];
+
+  for (const imgUrl of images) {
+    userContents.push({
+      type: 'image_url',
+      image_url: { url: imgUrl, detail: 'high' },
+    });
+  }
+
+  const isReasoningModel = model.startsWith('o1') || model.startsWith('o3');
+  const requestBody: any = {
+    model,
+    messages: [{ role: 'user', content: userContents }],
+  };
+  if (!isReasoningModel) {
+    requestBody.temperature = 0.0;
+  }
+
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    let errorDetail = response.statusText;
+    try {
+      const errJson = await response.json();
+      errorDetail = errJson.error?.message || errJson.message || JSON.stringify(errJson);
+    } catch {}
+    if (
+      (response.status === 401 || /invalid api key/i.test(errorDetail)) &&
+      backupApiKey &&
+      backupApiKey !== apiKey
+    ) {
+      return transcribeImageWithOpenAI(images, studentName, settings, backupApiKey);
+    }
+    throw new Error(`OpenAI OCR lỗi (${response.status}): ${errorDetail}`);
+  }
+
+  const data = await response.json();
+  const textOutput = data.choices?.[0]?.message?.content || '';
+
+  return {
+    transcription: textOutput.trim(),
+    modelUsed: model,
+  };
+}
+
+/**
+ * Transcribe math handwritten images using 3 models (Gemini, Claude, OpenAI),
+ * compare transcriptions line by line, resolve discrepancies with original image,
+ * and synthesize the authoritative consensus transcription.
+ */
+export async function transcribeWithThreeModelsAndConsensus(
+  submission: StudentSubmission,
+  settings: TeacherSettings,
+  apiKeys: {
+    gemini?: string;
+    claude?: string;
+    openai?: string;
+  },
+  backupKeys?: {
+    gemini?: string;
+    claude?: string;
+    openai?: string;
+  }
+): Promise<{ ocrComparison: OcrComparisonReport; consensusText: string }> {
+  if (!submission.images || submission.images.length === 0) {
+    return {
+      consensusText: submission.extractedText || '',
+      ocrComparison: {
+        status: 'single_model',
+        modelsUsed: ['Văn bản trực tiếp'],
+        results: [
+          {
+            provider: 'gemini',
+            modelName: 'Direct Text',
+            transcription: submission.extractedText || '',
+          },
+        ],
+        consensusText: submission.extractedText || '',
+        comparisonSummary: 'Bài làm không có ảnh viết tay, sử dụng văn bản trực tiếp.',
+        hasDiscrepancies: false,
+      },
+    };
+  }
+
+  const effectiveGeminiKey = apiKeys.gemini || backupKeys?.gemini;
+  const effectiveClaudeKey = apiKeys.claude || backupKeys?.claude;
+  const effectiveOpenaiKey = apiKeys.openai || backupKeys?.openai;
+
+  const tasks: {
+    provider: AIProvider;
+    name: string;
+    promise: Promise<{ transcription: string; modelUsed: string }>;
+  }[] = [];
+
+  // Model 1: Google Gemini
+  if (effectiveGeminiKey) {
+    tasks.push({
+      provider: 'gemini',
+      name: 'Google Gemini',
+      promise: transcribeImageWithGemini(
+        submission.images,
+        submission.studentName,
+        settings,
+        effectiveGeminiKey,
+        backupKeys?.gemini
+      ),
+    });
+  }
+
+  // Model 2: Anthropic Claude
+  if (effectiveClaudeKey) {
+    tasks.push({
+      provider: 'claude',
+      name: 'Anthropic Claude',
+      promise: transcribeImageWithClaude(
+        submission.images,
+        submission.studentName,
+        settings,
+        effectiveClaudeKey,
+        backupKeys?.claude
+      ),
+    });
+  }
+
+  // Model 3: OpenAI GPT-4o (kèm tự động dự phòng sang Gemini nếu OpenAI hết hạn mức hoặc lỗi)
+  if (effectiveOpenaiKey) {
+    tasks.push({
+      provider: 'openai',
+      name: 'OpenAI (GPT-4o)',
+      promise: transcribeImageWithOpenAI(
+        submission.images,
+        submission.studentName,
+        settings,
+        effectiveOpenaiKey,
+        backupKeys?.openai
+      ).catch(async (openAiErr) => {
+        if (effectiveGeminiKey) {
+          console.warn(
+            `[OCR Fallback] OpenAI gặp lỗi (${openAiErr.message}). Tự động dùng Gemini 3.6 Flash làm Model thứ 3.`
+          );
+          const fallbackSettings: TeacherSettings = {
+            ...settings,
+            geminiModel: 'gemini-3.6-flash',
+          };
+          const res = await transcribeImageWithGemini(
+            submission.images,
+            submission.studentName,
+            fallbackSettings,
+            effectiveGeminiKey,
+            backupKeys?.gemini
+          );
+          return {
+            transcription: res.transcription,
+            modelUsed: `${res.modelUsed} (Dự phòng cho OpenAI)`,
+          };
+        }
+        throw openAiErr;
+      }),
+    });
+  } else if (effectiveGeminiKey) {
+    const fallbackSettings: TeacherSettings = {
+      ...settings,
+      geminiModel: 'gemini-3.6-flash',
+    };
+    tasks.push({
+      provider: 'gemini',
+      name: 'Gemini (Model 3)',
+      promise: transcribeImageWithGemini(
+        submission.images,
+        submission.studentName,
+        fallbackSettings,
+        effectiveGeminiKey,
+        backupKeys?.gemini
+      ).then((res) => ({
+        transcription: res.transcription,
+        modelUsed: `${res.modelUsed} (Model 3)`,
+      })),
+    });
+  }
+
+  if (tasks.length === 0) {
+    throw new Error('Chưa cấu hình API Key nào để nhận diện công thức toán từ ảnh.');
+  }
+
+  const settled = await Promise.allSettled(tasks.map((t) => t.promise));
+  const modelResults: OcrModelResult[] = [];
+
+  settled.forEach((res, idx) => {
+    const t = tasks[idx];
+    if (res.status === 'fulfilled') {
+      modelResults.push({
+        provider: t.provider,
+        modelName: res.value.modelUsed,
+        transcription: res.value.transcription,
+      });
+    } else {
+      console.warn(`[OCR 3-Model] ${t.name} OCR thất bại:`, res.reason?.message || res.reason);
+      modelResults.push({
+        provider: t.provider,
+        modelName: t.name,
+        transcription: '',
+        error: res.reason?.message || 'Lỗi không xác định',
+      });
+    }
+  });
+
+  const successfulResults = modelResults.filter((r) => r.transcription && !r.error);
+
+  if (successfulResults.length === 0) {
+    throw new Error(
+      `Không thể đọc văn bản từ ảnh bằng các model AI: ${modelResults.map((r) => `${r.modelName}: ${r.error}`).join(' | ')}`
+    );
+  }
+
+  if (successfulResults.length === 1) {
+    const single = successfulResults[0];
+    return {
+      consensusText: single.transcription,
+      ocrComparison: {
+        status: 'single_model',
+        modelsUsed: [single.modelName],
+        results: modelResults,
+        consensusText: single.transcription,
+        comparisonSummary: `Chỉ có 1/3 model (${single.modelName}) nhận diện thành công. Đã sử dụng trực tiếp kết quả này.`,
+        hasDiscrepancies: false,
+      },
+    };
+  }
+
+  // Reconciliation pass: Compare 3 transcriptions against the image
+  const geminiText = modelResults.find((r) => r.provider === 'gemini' && !r.error)?.transcription || '';
+  const claudeText = modelResults.find((r) => r.provider === 'claude' && !r.error)?.transcription || '';
+  const openaiText =
+    modelResults.find((r) => r.provider === 'openai' && !r.error)?.transcription ||
+    modelResults.filter((r) => r.provider === 'gemini' && !r.error)[1]?.transcription ||
+    '';
+
+  let consensusText = successfulResults[0].transcription;
+  let comparisonSummary = 'Đã đối chiếu và hợp nhất các bản đọc từ các model AI.';
+  let hasDiscrepancies = false;
+  let discrepancies: string[] = [];
+
+  try {
+    const arbitrationPrompt = buildOcrConsensusPrompt(
+      geminiText,
+      claudeText,
+      openaiText,
+      submission.studentName
+    );
+
+    if (effectiveGeminiKey) {
+      const ai = new GoogleGenAI({ apiKey: effectiveGeminiKey });
+      const contents: any[] = [];
+      for (const imgUrl of submission.images) {
+        const match = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          contents.push({
+            inlineData: { mimeType: match[1], data: match[2] },
+          });
+        }
+      }
+      contents.push(arbitrationPrompt);
+
+      const arbCandidates = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.8-flash'];
+      let arbResponse: any = null;
+      for (const m of arbCandidates) {
+        try {
+          arbResponse = await ai.models.generateContent({
+            model: m,
+            contents,
+            config: {
+              responseMimeType: 'application/json',
+              temperature: 0.0,
+            },
+          });
+          break;
+        } catch (e: any) {
+          console.warn(`[OCR Arbitration] ${m} gặp lỗi:`, e.message || e);
+        }
+      }
+
+      if (arbResponse) {
+        const parsedArb = extractJsonFromText(arbResponse.text || '');
+        if (parsedArb.consensusText) {
+          consensusText = parsedArb.consensusText;
+        }
+        if (parsedArb.comparisonSummary) {
+          comparisonSummary = parsedArb.comparisonSummary;
+        }
+        hasDiscrepancies = Boolean(parsedArb.hasDiscrepancies);
+        discrepancies = Array.isArray(parsedArb.discrepancies) ? parsedArb.discrepancies : [];
+      }
+    }
+
+    // Fallback to Claude for arbitration if Gemini did not produce a consensus
+    if ((!consensusText || consensusText === successfulResults[0].transcription) && effectiveClaudeKey) {
+      try {
+        const contentBlocks: any[] = [];
+        for (const imgUrl of submission.images) {
+          const match = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
+          if (match) {
+            let mime = match[1].toLowerCase();
+            if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mime)) {
+              mime = 'image/jpeg';
+            }
+            contentBlocks.push({
+              type: 'image',
+              source: { type: 'base64', media_type: mime, data: match[2] },
+            });
+          }
+        }
+        contentBlocks.push({ type: 'text', text: arbitrationPrompt });
+
+        const claudeResp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': effectiveClaudeKey,
+            'anthropic-version': '2023-06-01',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 4096,
+            temperature: 0.0,
+            messages: [{ role: 'user', content: contentBlocks }],
+          }),
+        });
+
+        if (claudeResp.ok) {
+          const claudeData = await claudeResp.json();
+          const rawText = claudeData.content?.filter((b: any) => b.type === 'text')?.map((b: any) => b.text)?.join('\n') || '';
+          const parsedArb = extractJsonFromText(rawText);
+          if (parsedArb.consensusText) {
+            consensusText = parsedArb.consensusText;
+          }
+          if (parsedArb.comparisonSummary) {
+            comparisonSummary = parsedArb.comparisonSummary;
+          }
+          hasDiscrepancies = Boolean(parsedArb.hasDiscrepancies);
+          discrepancies = Array.isArray(parsedArb.discrepancies) ? parsedArb.discrepancies : [];
+        }
+      } catch (claudeArbErr: any) {
+        console.warn('[OCR Reconciliation] Claude arbitration fallback error:', claudeArbErr.message || claudeArbErr);
+      }
+    }
+  } catch (arbErr) {
+    console.warn('[OCR Reconciliation] Lỗi trong bước đối chiếu tự động, sử dụng bản đọc chi tiết nhất:', arbErr);
+    const sortedByLength = [...successfulResults].sort((a, b) => b.transcription.length - a.transcription.length);
+    consensusText = sortedByLength[0].transcription;
+    comparisonSummary = 'Đã hợp nhất từ bản đọc chi tiết nhất của các model.';
+  }
+
+  const ocrReport: OcrComparisonReport = {
+    status: hasDiscrepancies ? 'reconciled' : 'unanimous',
+    modelsUsed: successfulResults.map((r) => r.modelName),
+    results: modelResults,
+    consensusText,
+    comparisonSummary,
+    hasDiscrepancies,
+    discrepancies,
+    arbitratedBy: 'Gemini 3.8 Flash Cross-Verification',
+  };
+
+  return {
+    consensusText,
+    ocrComparison: ocrReport,
+  };
+}
+
+/**
  * Grade using Google Gemini AI
  */
 export async function gradeWithGemini(
@@ -183,10 +772,10 @@ export async function gradeWithGemini(
   contents.push(promptText);
 
   // Candidate models fallback
-  const userModel = settings.geminiModel || settings.model || process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-  const cleanPreferred = userModel === 'gemini-2.5-flash' ? 'gemini-3.8-flash' : userModel;
+  const userModel = settings.geminiModel || settings.model || process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+  const cleanPreferred = userModel === 'gemini-2.5-flash' || userModel === 'gemini-2.0-flash' ? 'gemini-3.6-flash' : userModel;
   const candidates = Array.from(
-    new Set([cleanPreferred, 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.5-flash'])
+    new Set([cleanPreferred, 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.7-flash'])
   );
 
   let response: any = null;
@@ -402,6 +991,7 @@ export async function gradeWithOpenAI(
         type: 'image_url',
         image_url: {
           url: imgUrl,
+          detail: 'high',
         },
       });
     }
@@ -488,6 +1078,33 @@ export async function gradeWithProvider(
 ): Promise<{ gradingResult: GradingResult; provider: AIProvider; modelUsed: string }> {
   const provider = settings.provider || 'claude';
 
+  // 0. Ensure high-fidelity math OCR transcription exists if submission has images
+  if (
+    submission.images &&
+    submission.images.length > 0 &&
+    (!submission.extractedText || !submission.ocrComparison) &&
+    settings.autoOcrBeforeGrading !== false
+  ) {
+    try {
+      const ocrKeys = {
+        gemini: provider === 'gemini' ? resolvedApiKey : undefined,
+        claude: provider === 'claude' ? resolvedApiKey : undefined,
+        openai: provider === 'openai' ? resolvedApiKey : undefined,
+      };
+      const ocrBackup = backupApiKey ? { [provider]: backupApiKey } : undefined;
+      const { ocrComparison, consensusText } = await transcribeWithThreeModelsAndConsensus(
+        submission,
+        settings,
+        ocrKeys,
+        ocrBackup
+      );
+      submission.extractedText = consensusText;
+      submission.ocrComparison = ocrComparison;
+    } catch (ocrErr) {
+      console.warn('[OCR] Chuyển tiếp chấm với ảnh trực tiếp:', ocrErr);
+    }
+  }
+
   switch (provider) {
     case 'claude': {
       const { gradingResult, modelUsed } = await gradeWithClaude(
@@ -497,6 +1114,9 @@ export async function gradeWithProvider(
         resolvedApiKey,
         backupApiKey
       );
+      if (submission.ocrComparison && !gradingResult.ocrComparison) {
+        gradingResult.ocrComparison = submission.ocrComparison;
+      }
       return { gradingResult, provider: 'claude', modelUsed };
     }
     case 'openai': {
@@ -507,6 +1127,9 @@ export async function gradeWithProvider(
         resolvedApiKey,
         backupApiKey
       );
+      if (submission.ocrComparison && !gradingResult.ocrComparison) {
+        gradingResult.ocrComparison = submission.ocrComparison;
+      }
       return { gradingResult, provider: 'openai', modelUsed };
     }
     case 'gemini':
@@ -518,6 +1141,9 @@ export async function gradeWithProvider(
         resolvedApiKey,
         backupApiKey
       );
+      if (submission.ocrComparison && !gradingResult.ocrComparison) {
+        gradingResult.ocrComparison = submission.ocrComparison;
+      }
       return { gradingResult, provider: 'gemini', modelUsed };
     }
   }
@@ -578,6 +1204,30 @@ export async function gradeWithThreeModelsAndConsensus(
   const tolerance = settings.consensusTolerance ?? 0.25;
   const maxRetries = settings.maxRegradeRetries ?? 2;
 
+  // 0. Ensure high-fidelity math OCR transcription exists if submission has images
+  if (
+    submission.images &&
+    submission.images.length > 0 &&
+    (!submission.extractedText || !submission.ocrComparison) &&
+    settings.autoOcrBeforeGrading !== false
+  ) {
+    console.log(
+      `[OCR 3-Model] Đang chạy nhận diện công thức toán viết tay bằng 3 model cho bài của ${submission.studentName}...`
+    );
+    try {
+      const { ocrComparison, consensusText } = await transcribeWithThreeModelsAndConsensus(
+        submission,
+        settings,
+        apiKeys,
+        backupKeys
+      );
+      submission.extractedText = consensusText;
+      submission.ocrComparison = ocrComparison;
+    } catch (ocrErr) {
+      console.warn('[OCR 3-Model] Cảnh báo lỗi khi OCR 3 model, tiếp tục với ảnh gốc:', ocrErr);
+    }
+  }
+
   let roundCount = 1;
   let regradeCount = 0;
   let finalEvaluations: ModelEvaluation[] = [];
@@ -634,11 +1284,11 @@ export async function gradeWithThreeModelsAndConsensus(
             const geminiKeyToUse = backupKeys?.gemini || apiKeys.gemini;
             if (geminiKeyToUse) {
               console.warn(
-                `[Consensus fallback] OpenAI gặp lỗi (${openAiErr.message}). Tự động dùng Gemini 3.7 Flash làm Model thứ 3.`
+                `[Consensus fallback] OpenAI gặp lỗi (${openAiErr.message}). Tự động dùng Gemini 3.6 Flash làm Model thứ 3.`
               );
               const fallbackSettings: TeacherSettings = {
                 ...settings,
-                geminiModel: 'gemini-3.7-flash',
+                geminiModel: 'gemini-3.6-flash',
               };
               const { gradingResult, modelUsed } = await gradeWithGemini(
                 submission,
@@ -657,10 +1307,10 @@ export async function gradeWithThreeModelsAndConsensus(
           }),
       });
     } else if (apiKeys.gemini) {
-      // Nếu không có OpenAI key, chạy Gemini 3.7 Flash làm Model thứ 3
+      // Nếu không có OpenAI key, chạy Gemini 3.6 Flash làm Model thứ 3
       const fallbackSettings: TeacherSettings = {
         ...settings,
-        geminiModel: 'gemini-3.7-flash',
+        geminiModel: 'gemini-3.6-flash',
       };
       tasks.push({
         provider: 'Gemini (Model 3)',
@@ -715,11 +1365,11 @@ export async function gradeWithThreeModelsAndConsensus(
     }
 
     // Nếu chỉ có 1 hoặc 2 model thành công nhưng cần đủ 3 kết quả để đối chiếu:
-    // Nếu có key Gemini, bổ sung thêm model Gemini khác (gemini-3.7-flash / gemini-3.6-flash / gemini-flash-latest) để luôn đủ 3 model!
+    // Nếu có key Gemini, bổ sung thêm model Gemini khác (gemini-3.6-flash / gemini-3.5-flash / gemini-3.8-flash) để luôn đủ 3 model!
     const effectiveGeminiKey = backupKeys?.gemini || apiKeys.gemini;
     if (successful.length < 3 && effectiveGeminiKey) {
       const needed = 3 - successful.length;
-      const extraCandidates = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-flash-latest'];
+      const extraCandidates = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.8-flash'];
       for (let i = 0; i < needed; i++) {
         const fallbackM = extraCandidates[i] || 'gemini-3.6-flash';
         try {
@@ -948,6 +1598,7 @@ export async function gradeWithThreeModelsAndConsensus(
     correctionGuide: primaryResult.correctionGuide,
     teacherComment: primaryResult.teacherComment,
     consensusReport,
+    ocrComparison: submission.ocrComparison,
   };
 
   return { gradingResult: finalGradingResult, consensusReport };

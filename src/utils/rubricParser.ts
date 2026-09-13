@@ -222,7 +222,7 @@ export async function parseRubricWithGemini(
   tables: string[][][],
   fileName: string,
   apiKey: string,
-  modelName: string = 'gemini-3.7-flash'
+  modelName: string = 'gemini-3.6-flash'
 ): Promise<RubricData> {
   const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
 
@@ -269,7 +269,7 @@ LƯU Ý:
 4. Chỉ trả về JSON hợp lệ, không giải thích thêm.
 `;
 
-  const candidates = Array.from(new Set([modelName, 'gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-3.5-flash']));
+  const candidates = Array.from(new Set([modelName, 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.7-flash']));
   let response: any = null;
   let lastErr: any = null;
 

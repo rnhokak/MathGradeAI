@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import 'katex/dist/katex.min.css';
 
 export const metadata: Metadata = {
   title: 'MathGrade AI - Hệ Thống Chấm Bài Tự Luận Môn Toán Bằng AI',
