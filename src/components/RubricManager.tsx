@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { FileText, Upload, Plus, Trash2, CheckCircle2, AlertCircle, Sparkles, RefreshCw } from 'lucide-react';
 import { RubricData, RubricCriterion, TeacherSettings } from '@/types/grading';
 import { parseRubricFromTablesAndText } from '@/utils/rubricParser';
+import { MathRenderer } from './MathRenderer';
 
 interface RubricManagerProps {
   rubric: RubricData;
@@ -326,16 +327,38 @@ export const RubricManager: React.FC<RubricManagerProps> = ({
 
         {/* Problem Statement Box */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-            Nội dung câu hỏi / Đề bài và Đáp án mẫu:
-          </label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+              Nội dung câu hỏi / Đề bài và Đáp án mẫu:
+            </label>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              💡 Công thức đặt trong <code>$...$</code> hoặc <code>$$...$$</code>
+            </span>
+          </div>
           <textarea
             className="textarea-field font-mono"
             rows={4}
             value={rubric.problemStatement}
             onChange={(e) => onChangeRubric({ ...rubric, problemStatement: e.target.value })}
-            placeholder="Nhập đề bài hoặc công thức toán học cần giải..."
+            placeholder="Nhập đề bài hoặc công thức toán học cần giải (ví dụ: $x > 0$, $\log_5 x$)..."
           />
+          {rubric.problemStatement && (
+            <div
+              style={{
+                marginTop: '4px',
+                padding: '10px 14px',
+                background: 'rgba(15, 23, 42, 0.65)',
+                border: '1px solid rgba(99, 102, 241, 0.25)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.86rem',
+              }}
+            >
+              <div style={{ fontSize: '0.72rem', color: '#818cf8', fontWeight: 600, marginBottom: '4px' }}>
+                👁️ Xem trước công thức toán:
+              </div>
+              <MathRenderer text={rubric.problemStatement} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -440,13 +463,20 @@ export const RubricManager: React.FC<RubricManagerProps> = ({
                 </div>
 
                 {/* Description */}
-                <input
-                  type="text"
-                  className="input-field font-mono"
-                  value={crit.description}
-                  onChange={(e) => updateCriterion(crit.id, 'description', e.target.value)}
-                  placeholder="Yêu cầu cụ thể của bước này (ví dụ: x > 0 hoặc đặt t >= 0)"
-                />
+                <div>
+                  <input
+                    type="text"
+                    className="input-field font-mono"
+                    value={crit.description}
+                    onChange={(e) => updateCriterion(crit.id, 'description', e.target.value)}
+                    placeholder="Yêu cầu cụ thể của bước này (ví dụ: $x > 0$ hoặc đặt $t \ge 0$)"
+                  />
+                  {crit.description && (crit.description.includes('$') || crit.description.includes('\\')) && (
+                    <div style={{ marginTop: '4px', fontSize: '0.78rem', color: '#94a3b8' }}>
+                      <MathRenderer text={crit.description} inline />
+                    </div>
+                  )}
+                </div>
 
                 {/* Delete button */}
                 <button

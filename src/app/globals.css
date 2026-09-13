@@ -310,32 +310,50 @@ code, pre, .font-mono {
 
 /* Math formula rendering styling */
 .math-rendered-content {
-  color: #f1f5f9;
-  font-size: 0.92rem;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.math-rendered-content.math-inline {
+  display: inline;
 }
 
 .math-rendered-content .katex {
-  font-size: 1.08em;
-  color: #e2e8f0;
+  font-size: 1.06em;
+  color: #f8fafc;
+  text-rendering: geometricPrecision;
 }
 
 .math-block-wrapper {
   margin: 10px 0;
   padding: 10px 14px;
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(15, 23, 42, 0.75);
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(99, 102, 241, 0.25);
   overflow-x: auto;
   text-align: center;
 }
 
 .math-block-wrapper .katex-display {
-  margin: 0.2em 0;
+  margin: 0.25em 0;
+}
+
+.math-block-wrapper .katex {
+  color: #67e8f9;
 }
 
 .math-inline-wrapper {
-  padding: 1px 4px;
+  display: inline-block;
+  vertical-align: baseline;
+  padding: 1px 5px;
+  margin: 0 1.5px;
   border-radius: 4px;
-  background: rgba(99, 102, 241, 0.08);
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.math-inline-wrapper .katex {
+  color: #a5f3fc;
 }
 

@@ -666,9 +666,9 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                           {ocrReport.arbitratedBy || 'AI Verification'}
                         </span>
                       </div>
-                      <p style={{ fontSize: '0.84rem', color: '#e2e8f0', lineHeight: '1.5' }}>
-                        {ocrReport.comparisonSummary}
-                      </p>
+                      <div style={{ fontSize: '0.84rem', color: '#e2e8f0', lineHeight: '1.5' }}>
+                        <MathRenderer text={ocrReport.comparisonSummary} />
+                      </div>
 
                       {ocrReport.discrepancies && ocrReport.discrepancies.length > 0 && (
                         <div style={{ marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '6px' }}>
@@ -677,7 +677,9 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                           </span>
                           <ul style={{ margin: '4px 0 0 16px', fontSize: '0.78rem', color: '#cbd5e1' }}>
                             {ocrReport.discrepancies.map((d, i) => (
-                              <li key={i}>{d}</li>
+                              <li key={i}>
+                                <MathRenderer text={d} inline />
+                              </li>
                             ))}
                           </ul>
                         </div>
@@ -940,9 +942,9 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
               )}
 
               {/* Summary note */}
-              <p style={{ fontSize: '0.82rem', color: '#cbd5e1', lineHeight: 1.5, marginBottom: showConsensusDetails ? '14px' : '0' }}>
-                {result.consensusReport.summary}
-              </p>
+              <div style={{ fontSize: '0.82rem', color: '#cbd5e1', lineHeight: '1.5', marginBottom: showConsensusDetails ? '14px' : '0' }}>
+                <MathRenderer text={result.consensusReport.summary} />
+              </div>
 
               {/* Comparison Table */}
               {showConsensusDetails && (
@@ -1009,7 +1011,9 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                             }}
                           >
                             <td style={{ padding: '8px 10px', color: '#f1f5f9' }}>
-                              <span style={{ fontWeight: 600 }}>{c.name}</span>{' '}
+                              <span style={{ fontWeight: 600 }}>
+                                <MathRenderer text={c.name} inline />
+                              </span>{' '}
                               <span style={{ color: 'var(--text-muted)' }}>({c.points}đ)</span>
                             </td>
 
@@ -1133,10 +1137,9 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                   fontSize: '0.88rem',
                   lineHeight: '1.6',
                   color: '#e2e8f0',
-                  whiteSpace: 'pre-line',
                 }}
               >
-                {result.generalComment || '• Học sinh đã nộp bài làm.'}
+                <MathRenderer text={result.generalComment || '• Học sinh đã nộp bài làm.'} />
               </div>
             )}
           </div>
@@ -1164,7 +1167,7 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#f8fafc' }}>
-                      {crit.criterionName}
+                      <MathRenderer text={crit.criterionName} inline />
                     </span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <input
@@ -1191,9 +1194,9 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                     </div>
                   </div>
 
-                  <p style={{ fontSize: '0.84rem', color: '#cbd5e1', lineHeight: '1.5' }}>
-                    {crit.reason}
-                  </p>
+                  <div style={{ fontSize: '0.85rem', color: '#cbd5e1', lineHeight: '1.6', marginTop: '4px' }}>
+                    <MathRenderer text={crit.reason} />
+                  </div>
                 </div>
               ))}
             </div>
@@ -1222,10 +1225,10 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
               >
                 <CheckCircle size={15} /> 3. ƯU ĐIỂM
               </h4>
-              <ul style={{ paddingLeft: '18px', fontSize: '0.82rem', color: '#cbd5e1', lineHeight: '1.5' }}>
+              <ul style={{ paddingLeft: '18px', fontSize: '0.84rem', color: '#cbd5e1', lineHeight: '1.6' }}>
                 {(result.strengths || []).map((s, i) => (
                   <li key={i} style={{ marginBottom: '6px' }}>
-                    {s}
+                    <MathRenderer text={s} inline />
                   </li>
                 ))}
               </ul>
@@ -1252,10 +1255,10 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
               >
                 <AlertTriangle size={15} /> NHƯỢC ĐIỂM & LƯU Ý
               </h4>
-              <ul style={{ paddingLeft: '18px', fontSize: '0.82rem', color: '#cbd5e1', lineHeight: '1.5' }}>
+              <ul style={{ paddingLeft: '18px', fontSize: '0.84rem', color: '#cbd5e1', lineHeight: '1.6' }}>
                 {(result.weaknesses || []).map((w, i) => (
                   <li key={i} style={{ marginBottom: '6px' }}>
-                    {w}
+                    <MathRenderer text={w} inline />
                   </li>
                 ))}
               </ul>
@@ -1283,9 +1286,9 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
             >
               <Sparkles size={15} /> 4. HƯỚNG DẪN SỬA BÀI & RÚT KINH NGHIỆM
             </h4>
-            <p style={{ fontSize: '0.85rem', color: '#e2e8f0', lineHeight: '1.5', whiteSpace: 'pre-line' }}>
-              {result.correctionGuide || 'Không có yêu cầu chỉnh sửa đặc biệt.'}
-            </p>
+            <div style={{ fontSize: '0.86rem', color: '#e2e8f0', lineHeight: '1.6' }}>
+              <MathRenderer text={result.correctionGuide || 'Không có yêu cầu chỉnh sửa đặc biệt.'} />
+            </div>
           </div>
 
           {/* 5. LỜI NHẬN XÉT CỦA GIÁO VIÊN */}
@@ -1331,7 +1334,7 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                 }}
               />
             ) : (
-              <p
+              <div
                 style={{
                   fontSize: '0.92rem',
                   lineHeight: '1.6',
@@ -1339,8 +1342,8 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                   color: '#e2e8f0',
                 }}
               >
-                "{result.teacherComment}"
-              </p>
+                "<MathRenderer text={result.teacherComment} inline />"
+              </div>
             )}
           </div>
         </div>

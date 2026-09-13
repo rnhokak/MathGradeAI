@@ -3,6 +3,7 @@
 import React from 'react';
 import { Users, BarChart3, Download, CheckCircle, AlertCircle } from 'lucide-react';
 import { StudentSubmission } from '@/types/grading';
+import { MathRenderer } from './MathRenderer';
 
 interface ClassOverviewProps {
   submissions: StudentSubmission[];
@@ -150,7 +151,7 @@ export const ClassOverview: React.FC<ClassOverviewProps> = ({
                     </td>
                     <td style={{ padding: '12px', color: 'var(--text-secondary)', maxWidth: '380px' }}>
                       <span style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                        {r.strengths[0] || 'Làm bài hoàn chỉnh'}
+                        <MathRenderer text={r.strengths[0] || 'Làm bài hoàn chỉnh'} inline />
                       </span>
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>
