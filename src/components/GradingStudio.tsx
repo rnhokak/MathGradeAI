@@ -64,7 +64,7 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
   const [isEditingText, setIsEditingText] = useState(false);
   const [isReGrading, setIsReGrading] = useState(false);
   const [isReRunningOcr, setIsReRunningOcr] = useState(false);
-  const [selectedOcrModelTab, setSelectedOcrModelTab] = useState<'consensus' | 'gemini' | 'claude' | 'openai'>('consensus');
+  const [selectedOcrModelTab, setSelectedOcrModelTab] = useState<'consensus' | 'gemini' | 'claude' | 'openai' | 'openrouter'>('consensus');
 
   if (!result) {
     return (
@@ -97,6 +97,7 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
           ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
           ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
           ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
+          ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
         },
         body: JSON.stringify({
           submission: {
@@ -120,7 +121,7 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
     }
   };
 
-  // Run OCR with 3 models on demand
+  // Run OCR with models on demand
   const handleRerunOcr = async () => {
     setIsReRunningOcr(true);
     try {
@@ -131,6 +132,7 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
           ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
           ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
           ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
+          ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
         },
         body: JSON.stringify({
           submission,
@@ -725,6 +727,8 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                             ? `Gemini (${r.modelName})`
                             : r.provider === 'claude'
                             ? `Claude (${r.modelName})`
+                            : r.provider === 'openrouter'
+                            ? `Qwen (${r.modelName.replace(/^qwen\//i, '')})`
                             : `OpenAI (${r.modelName})`}
                         </button>
                       ))}
@@ -963,7 +967,11 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                         {result.consensusReport.evaluations.map((ev, idx) => {
                           const isFallback = ev.modelName.includes('Dự phòng');
                           const headerLabel = isFallback
-                            ? 'GEMINI (Dự phòng cho OpenAI)'
+                            ? `${ev.provider.toUpperCase()} (Dự phòng)`
+                            : ev.provider === 'alibabacloud'
+                            ? `QWEN (Alibaba Cloud)`
+                            : ev.provider === 'openrouter'
+                            ? `QWEN (${ev.modelName.replace(/^qwen\//i, '').split('-').slice(0, 3).join('-')})`
                             : `${ev.provider.toUpperCase()} (${ev.modelName.split('-').slice(0, 2).join('-')})`;
                           return (
                             <th
@@ -1290,6 +1298,41 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
               <MathRenderer text={result.correctionGuide || 'Không có yêu cầu chỉnh sửa đặc biệt.'} />
             </div>
           </div>
+
+          {/* CHUỖI SUY LUẬN (REASONING DETAILS) NẾU CÓ TỪ QWEN / OPENROUTER */}
+          {result.reasoningText && (
+            <div
+              className="glass-panel"
+              style={{
+                padding: '16px 20px',
+                borderLeft: '4px solid #a855f7',
+                background: 'rgba(168, 85, 247, 0.05)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <Cpu size={16} color="#c084fc" />
+                <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#e9d5ff' }}>
+                  Chuỗi Tư Duy &amp; Suy Luận Của Qwen (Chain-of-Thought / Reasoning Details)
+                </h4>
+              </div>
+              <div
+                style={{
+                  fontSize: '0.82rem',
+                  color: '#cbd5e1',
+                  lineHeight: 1.6,
+                  maxHeight: '260px',
+                  overflowY: 'auto',
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  padding: '12px',
+                  borderRadius: '6px',
+                  fontFamily: 'monospace',
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                {result.reasoningText}
+              </div>
+            </div>
+          )}
 
           {/* 5. LỜI NHẬN XÉT CỦA GIÁO VIÊN */}
           <div

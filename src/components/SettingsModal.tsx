@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { SUPPORTED_CLAUDE_MODELS, ModelOption } from '@/utils/modelConfig';
 import {
   X,
   Key,
@@ -44,13 +45,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     geminiModel: settings.geminiModel || settings.model || 'gemini-3.8-flash',
     claudeModel: settings.claudeModel || 'claude-sonnet-4-6',
     openaiModel: settings.openaiModel || 'gpt-4o',
+    openrouterModel: settings.openrouterModel || 'qwen/qwen3.8-27b:free',
     claudeBaseUrl: settings.claudeBaseUrl || 'https://api.anthropic.com/v1',
     openaiBaseUrl: settings.openaiBaseUrl || 'https://api.openai.com/v1',
+    openrouterBaseUrl: settings.openrouterBaseUrl || 'https://openrouter.ai/api/v1',
+    openrouterReasoning: settings.openrouterReasoning !== false,
+    openrouterApiKey: settings.openrouterApiKey || '',
+    alibabacloudModel: settings.alibabacloudModel || 'qwen-plus-character',
+    alibabacloudBaseUrl:
+      settings.alibabacloudBaseUrl ||
+      'https://ws-oxwvfx79avt7ebq3.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1',
+    alibabacloudApiKey: settings.alibabacloudApiKey || '',
   });
 
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [showClaudeKey, setShowClaudeKey] = useState(false);
   const [showOpenAIKey, setShowOpenAIKey] = useState(false);
+  const [showOpenRouterKey, setShowOpenRouterKey] = useState(false);
+  const [showAlibabaCloudKey, setShowAlibabaCloudKey] = useState(false);
+
+  const [claudeModels, setClaudeModels] = useState<ModelOption[]>(SUPPORTED_CLAUDE_MODELS);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch('/api/config')
+      .then((res) => res.json())
+      .then((cfg) => {
+        if (cfg.success && cfg.claude?.models?.length > 0) {
+          setClaudeModels(cfg.claude.models);
+        }
+      })
+      .catch((err) => console.warn('Không thể tải cấu hình models từ server:', err));
+  }, [isOpen]);
 
   // Custom model flags
   const [isCustomGemini, setIsCustomGemini] = useState(
@@ -61,17 +87,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isCustomClaude, setIsCustomClaude] = useState(
     ![
       'claude-sonnet-4-6',
-      'claude-opus-4-6',
+      'claude-opus-5',
+      'claude-opus-4-8',
+      'claude-opus-4-7',
+      'claude-haiku-4-5',
       'claude-haiku-4-5-20251001',
+      'claude-opus-4-6',
+      'claude-sonnet-5',
       'claude-sonnet-4-5-20250929',
       'claude-opus-4-5-20251101',
-      'claude-sonnet-5',
-      'claude-opus-5',
-      'claude-fable-5-1',
     ].includes(current.claudeModel)
   );
   const [isCustomOpenAI, setIsCustomOpenAI] = useState(
     !['gpt-4o', 'gpt-4o-mini', 'o3-mini', 'o1', 'gpt-4-turbo'].includes(current.openaiModel)
+  );
+  const [isCustomOpenRouter, setIsCustomOpenRouter] = useState(
+    ![
+      'qwen/qwen3.8-27b:free',
+      'qwen/qwen-2.5-vl-72b-instruct:free',
+      'qwen/qwen-2.5-vl-72b-instruct',
+      'qwen/qwen-2.5-72b-instruct',
+      'qwen/qwq-32b-preview',
+      'qwen/qwen-2.5-coder-32b-instruct',
+    ].includes(current.openrouterModel || '')
+  );
+  const [isCustomAlibabaCloud, setIsCustomAlibabaCloud] = useState(
+    ![
+      'qwen-plus-character',
+      'qwen-flash-character',
+      'qwen-plus',
+      'qwen-flash',
+      'qwen-max',
+      'qwen-vl-max',
+      'qwen2.5-vl-72b-instruct',
+    ].includes(current.alibabacloudModel || '')
   );
 
   if (!isOpen) return null;
@@ -434,7 +483,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
                 gap: '10px',
                 marginBottom: '18px',
               }}
@@ -507,7 +556,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <Bot size={16} color="#f59e0b" />
                   <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>Claude API</span>
                 </div>
-                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>3.7 / 3.5 Sonnet</span>
+                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Sonnet 4.6 / Opus 5</span>
                 {current.provider === 'claude' && (
                   <span className="badge badge-amber" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
                     Đang chọn
@@ -543,11 +592,105 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Layers size={16} color="#10b981" />
-                  <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>OpenAI (OpenAPI)</span>
+                  <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>OpenAI</span>
                 </div>
                 <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>GPT-4o / o3-mini</span>
                 {current.provider === 'openai' && (
                   <span className="badge badge-emerald" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
+                    Đang chọn
+                  </span>
+                )}
+              </button>
+
+              {/* OpenRouter (Qwen) Tab */}
+              <button
+                type="button"
+                onClick={() => handleProviderSelect('openrouter')}
+                style={{
+                  padding: '12px 10px',
+                  borderRadius: 'var(--radius-md)',
+                  border:
+                    current.provider === 'openrouter'
+                      ? '2px solid #a855f7'
+                      : '1px solid var(--border-subtle)',
+                  background:
+                    current.provider === 'openrouter'
+                      ? 'rgba(168, 85, 247, 0.18)'
+                      : 'rgba(255, 255, 255, 0.03)',
+                  color: '#f8fafc',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease',
+                  boxShadow:
+                    current.provider === 'openrouter' ? '0 0 16px rgba(168, 85, 247, 0.3)' : 'none',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Cpu size={16} color="#c084fc" />
+                  <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>Qwen (OpenRouter)</span>
+                </div>
+                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Qwen 3.8 / 2.5 VL</span>
+                {current.provider === 'openrouter' && (
+                  <span
+                    className="badge"
+                    style={{
+                      fontSize: '0.68rem',
+                      padding: '2px 8px',
+                      background: 'rgba(168, 85, 247, 0.3)',
+                      color: '#e9d5ff',
+                      border: '1px solid #a855f7',
+                    }}
+                  >
+                    Đang chọn
+                  </span>
+                )}
+              </button>
+
+              {/* Alibaba Cloud (Qwen) Tab */}
+              <button
+                type="button"
+                onClick={() => handleProviderSelect('alibabacloud')}
+                style={{
+                  padding: '12px 10px',
+                  borderRadius: 'var(--radius-md)',
+                  border:
+                    current.provider === 'alibabacloud'
+                      ? '2px solid #ea580c'
+                      : '1px solid var(--border-subtle)',
+                  background:
+                    current.provider === 'alibabacloud'
+                      ? 'rgba(234, 88, 12, 0.18)'
+                      : 'rgba(255, 255, 255, 0.03)',
+                  color: '#f8fafc',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease',
+                  boxShadow:
+                    current.provider === 'alibabacloud' ? '0 0 16px rgba(234, 88, 12, 0.3)' : 'none',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Cpu size={16} color="#fb923c" />
+                  <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>Alibaba Cloud</span>
+                </div>
+                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Model Studio (Qwen)</span>
+                {current.provider === 'alibabacloud' && (
+                  <span
+                    className="badge"
+                    style={{
+                      fontSize: '0.68rem',
+                      padding: '2px 8px',
+                      background: 'rgba(234, 88, 12, 0.3)',
+                      color: '#ffedd5',
+                      border: '1px solid #ea580c',
+                    }}
+                  >
                     Đang chọn
                   </span>
                 )}
@@ -584,7 +727,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <span>
                   💡 <strong>Gợi ý:</strong> Để trống các ô API Key nếu muốn hệ thống tự động dùng các API Key chuẩn đã khai báo sẵn trong file <code>.env.local</code>.
                 </span>
-                {(current.geminiApiKey || current.claudeApiKey || current.openaiApiKey) && (
+                {(current.geminiApiKey ||
+                  current.claudeApiKey ||
+                  current.openaiApiKey ||
+                  current.openrouterApiKey ||
+                  current.alibabacloudApiKey) && (
                   <button
                     type="button"
                     onClick={() => {
@@ -593,6 +740,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         geminiApiKey: '',
                         claudeApiKey: '',
                         openaiApiKey: '',
+                        openrouterApiKey: '',
+                        alibabacloudApiKey: '',
                       });
                     }}
                     className="btn btn-secondary"
@@ -748,29 +897,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         }
                       }}
                     >
-                      <option value="claude-sonnet-4-6">
-                        Claude Sonnet 4.6 (Khuyên dùng - Chuẩn xác, chi tiết & nhận diện chữ viết tay tốt nhất)
-                      </option>
-                      <option value="claude-opus-4-6">
-                        Claude Opus 4.6 (Lập luận & Suy luận toán học chuyên sâu nhất)
-                      </option>
-                      <option value="claude-haiku-4-5-20251001">
-                        Claude Haiku 4.5 (Tốc độ cao & Tiết kiệm chi phí)
-                      </option>
-                      <option value="claude-sonnet-5">
-                        Claude Sonnet 5
-                      </option>
-                      <option value="claude-opus-5">
-                        Claude Opus 5
-                      </option>
-                      <option value="claude-sonnet-4-5-20250929">
-                        Claude Sonnet 4.5
-                      </option>
-                      <option value="claude-opus-4-5-20251101">
-                        Claude Opus 4.5
-                      </option>
+                      {claudeModels.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} ({m.description})
+                        </option>
+                      ))}
                       <option value="custom">-- Nhập tên model Claude tùy chỉnh --</option>
                     </select>
+
+                    <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '4px' }}>
+                      💡 Danh sách mô hình tuân theo tài liệu Anthropic Messages API (claudecode.pimath.id.vn). Bạn có thể cấu hình ẩn/hiện model qua biến <code>CLAUDE_VISIBLE_MODELS</code> hoặc <code>CLAUDE_HIDDEN_MODELS</code> trong <code>.env.local</code>.
+                    </p>
 
                     {isCustomClaude && (
                       <input
@@ -862,14 +999,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       }}
                     >
                       <Globe size={13} />
-                      Claude Base URL (Tùy chọn - mặc định: https://api.anthropic.com/v1):
+                      Claude Base URL (Tùy chọn - mặc định: https://claudecode.pimath.id.vn/v1):
                     </label>
                     <input
                       type="text"
                       className="input-field font-mono"
                       value={current.claudeBaseUrl || ''}
                       onChange={(e) => setCurrent({ ...current, claudeBaseUrl: e.target.value })}
-                      placeholder="https://api.anthropic.com/v1"
+                      placeholder="https://claudecode.pimath.id.vn/v1"
                     />
                   </div>
                 </>
@@ -1015,6 +1152,351 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     />
                     <p style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '4px' }}>
                       Mặc định là <code>https://api.openai.com/v1</code>. Có thể đổi sang OpenRouter (<code>https://openrouter.ai/api/v1</code>) hoặc proxy tùy ý.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {/* 4. OPENROUTER / QWEN CONFIG */}
+              {current.provider === 'openrouter' && (
+                <>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                        color: '#f8fafc',
+                        marginBottom: '6px',
+                        display: 'block',
+                      }}
+                    >
+                      Mô hình Qwen (OpenRouter.ai):
+                    </label>
+                    <select
+                      className="input-field"
+                      value={isCustomOpenRouter ? 'custom' : (current.openrouterModel || 'qwen/qwen3.8-27b:free')}
+                      onChange={(e) => {
+                        if (e.target.value === 'custom') {
+                          setIsCustomOpenRouter(true);
+                        } else {
+                          setIsCustomOpenRouter(false);
+                          setCurrent({ ...current, openrouterModel: e.target.value });
+                        }
+                      }}
+                    >
+                      <option value="qwen/qwen3.8-27b:free">
+                        qwen/qwen3.8-27b:free (Khuyên dùng - Suy luận reasoning cao cấp, Miễn phí)
+                      </option>
+                      <option value="qwen/qwen-2.5-vl-72b-instruct:free">
+                        qwen/qwen-2.5-vl-72b-instruct:free (Đọc ảnh & chữ viết tay Toán học, Miễn phí)
+                      </option>
+                      <option value="qwen/qwen-2.5-vl-72b-instruct">
+                        qwen/qwen-2.5-vl-72b-instruct (Thị giác & chữ viết tay đỉnh cao)
+                      </option>
+                      <option value="qwen/qwen-2.5-72b-instruct">
+                        qwen/qwen-2.5-72b-instruct (Mô hình 72B mạnh mẽ, toàn diện)
+                      </option>
+                      <option value="qwen/qwq-32b-preview">
+                        qwen/qwq-32b-preview (QwQ 32B - Chuyên gia suy luận logic toán học)
+                      </option>
+                      <option value="qwen/qwen-2.5-coder-32b-instruct">
+                        qwen/qwen-2.5-coder-32b-instruct (Qwen 2.5 Coder 32B)
+                      </option>
+                      <option value="custom">-- Nhập tên model tùy chỉnh trên OpenRouter --</option>
+                    </select>
+
+                    {isCustomOpenRouter && (
+                      <input
+                        type="text"
+                        className="input-field font-mono"
+                        placeholder="Ví dụ: qwen/qwen3.8-27b:free hoặc qwen/qwen-2.5-vl-72b-instruct"
+                        value={current.openrouterModel || ''}
+                        onChange={(e) => setCurrent({ ...current, openrouterModel: e.target.value })}
+                        style={{ marginTop: '8px' }}
+                      />
+                    )}
+                  </div>
+
+                  <div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '6px',
+                      }}
+                    >
+                      <label
+                        style={{
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          color: '#f8fafc',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <Key size={14} color="#c084fc" />
+                        OpenRouter API Key:
+                      </label>
+                      <a
+                        href="https://openrouter.ai/keys"
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          fontSize: '0.75rem',
+                          color: '#c084fc',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        Lấy key OpenRouter <ExternalLink size={12} />
+                      </a>
+                    </div>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type={showOpenRouterKey ? 'text' : 'password'}
+                        className="input-field font-mono"
+                        value={current.openrouterApiKey || ''}
+                        onChange={(e) => setCurrent({ ...current, openrouterApiKey: e.target.value })}
+                        placeholder="sk-or-v1-..."
+                        style={{ paddingRight: '40px' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowOpenRouterKey(!showOpenRouterKey)}
+                        style={{
+                          position: 'absolute',
+                          right: '10px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--text-secondary)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {showOpenRouterKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      style={{
+                        fontSize: '0.8rem',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <Globe size={13} />
+                      OpenRouter Base URL:
+                    </label>
+                    <input
+                      type="text"
+                      className="input-field font-mono"
+                      value={current.openrouterBaseUrl || ''}
+                      onChange={(e) => setCurrent({ ...current, openrouterBaseUrl: e.target.value })}
+                      placeholder="https://openrouter.ai/api/v1"
+                    />
+                  </div>
+
+                  {/* Reasoning toggle */}
+                  <div
+                    style={{
+                      padding: '12px 14px',
+                      background: 'rgba(168, 85, 247, 0.08)',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid rgba(168, 85, 247, 0.25)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontWeight: 700, fontSize: '0.86rem', color: '#f8fafc' }}>
+                        🧠 Bật chế độ Reasoning (Suy luận từng bước - reasoning: &#123; enabled: true &#125;)
+                      </span>
+                      <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px', lineHeight: 1.4 }}>
+                        Kích hoạt tư duy chuỗi suy luận sâu của Qwen (Chain-of-Thought) và ghi nhận chi tiết <code>reasoning_details</code> trong lời phê và thẩm định tiêu chí.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={current.openrouterReasoning !== false}
+                      onChange={(e) =>
+                        setCurrent({ ...current, openrouterReasoning: e.target.checked })
+                      }
+                      style={{
+                        width: '18px',
+                        height: '18px',
+                        cursor: 'pointer',
+                        accentColor: '#a855f7',
+                        flexShrink: 0,
+                      }}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* 5. ALIBABA CLOUD MODEL STUDIO (QWEN) CONFIG */}
+              {current.provider === 'alibabacloud' && (
+                <>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                        color: '#f8fafc',
+                        marginBottom: '6px',
+                        display: 'block',
+                      }}
+                    >
+                      Mô hình Qwen (Alibaba Cloud Model Studio):
+                    </label>
+                    <select
+                      className="input-field"
+                      value={isCustomAlibabaCloud ? 'custom' : (current.alibabacloudModel || 'qwen-plus-character')}
+                      onChange={(e) => {
+                        if (e.target.value === 'custom') {
+                          setIsCustomAlibabaCloud(true);
+                        } else {
+                          setIsCustomAlibabaCloud(false);
+                          setCurrent({ ...current, alibabacloudModel: e.target.value });
+                        }
+                      }}
+                    >
+                      <option value="qwen-plus-character">
+                        qwen-plus-character (Đang kích hoạt trên tài khoản - Khuyên dùng)
+                      </option>
+                      <option value="qwen-flash-character">
+                        qwen-flash-character (Đang kích hoạt trên tài khoản - Phản hồi nhanh)
+                      </option>
+                      <option value="qwen-plus">
+                        qwen-plus (Qwen Plus - Đa năng)
+                      </option>
+                      <option value="qwen-flash">
+                        qwen-flash (Qwen Flash)
+                      </option>
+                      <option value="qwen-max">
+                        qwen-max (Qwen Max - Mạnh nhất)
+                      </option>
+                      <option value="qwen-vl-max">
+                        qwen-vl-max (Đọc ảnh & chữ viết tay)
+                      </option>
+                      <option value="qwen2.5-vl-72b-instruct">
+                        qwen2.5-vl-72b-instruct (Chuyên gia chữ viết tay & công thức Toán)
+                      </option>
+                      <option value="custom">-- Nhập tên model tùy chỉnh trên Alibaba Cloud --</option>
+                    </select>
+
+                    {isCustomAlibabaCloud && (
+                      <input
+                        type="text"
+                        className="input-field font-mono"
+                        placeholder="Ví dụ: qwen-plus-character hoặc qwen-vl-max"
+                        value={current.alibabacloudModel || ''}
+                        onChange={(e) => setCurrent({ ...current, alibabacloudModel: e.target.value })}
+                        style={{ marginTop: '8px' }}
+                      />
+                    )}
+                  </div>
+
+                  <div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '6px',
+                      }}
+                    >
+                      <label
+                        style={{
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          color: '#f8fafc',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <Key size={14} color="#fb923c" />
+                        Alibaba Cloud API Key:
+                      </label>
+                      <a
+                        href="https://modelstudio.console.alibabacloud.com"
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          fontSize: '0.75rem',
+                          color: '#fb923c',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        Model Studio Console <ExternalLink size={12} />
+                      </a>
+                    </div>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type={showAlibabaCloudKey ? 'text' : 'password'}
+                        className="input-field font-mono"
+                        value={current.alibabacloudApiKey || ''}
+                        onChange={(e) => setCurrent({ ...current, alibabacloudApiKey: e.target.value })}
+                        placeholder="sk-ws-..."
+                        style={{ paddingRight: '40px' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowAlibabaCloudKey(!showAlibabaCloudKey)}
+                        style={{
+                          position: 'absolute',
+                          right: '10px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--text-secondary)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {showAlibabaCloudKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      style={{
+                        fontSize: '0.8rem',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <Globe size={13} />
+                      Alibaba Cloud Base URL (OpenAI-Compatible endpoint):
+                    </label>
+                    <input
+                      type="text"
+                      className="input-field font-mono"
+                      value={current.alibabacloudBaseUrl || ''}
+                      onChange={(e) => setCurrent({ ...current, alibabacloudBaseUrl: e.target.value })}
+                      placeholder="https://ws-oxwvfx79avt7ebq3.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+                    />
+                    <p style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '4px' }}>
+                      Endpoint tương thích OpenAI khu vực Singapore (DashScope / Model Studio).
                     </p>
                   </div>
                 </>

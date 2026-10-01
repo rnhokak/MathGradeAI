@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Sparkles, Settings, UserCheck, BookOpen, GraduationCap, Zap, Bot, Layers } from 'lucide-react';
+import { Sparkles, Settings, UserCheck, BookOpen, GraduationCap, Zap, Bot, Layers, Cpu } from 'lucide-react';
 import { TeacherSettings } from '@/types/grading';
 
 interface HeaderProps {
@@ -61,7 +61,35 @@ export const Header: React.FC<HeaderProps> = ({
               <h1 style={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
                 MathGrade <span className="text-gradient">AI</span>
               </h1>
-              {settings.provider === 'claude' ? (
+              {settings.provider === 'alibabacloud' ? (
+                <span
+                  className="badge"
+                  style={{
+                    cursor: 'pointer',
+                    background: 'rgba(234, 88, 12, 0.25)',
+                    color: '#ffedd5',
+                    border: '1px solid #ea580c',
+                  }}
+                  onClick={onOpenSettings}
+                  title="Bấm để cấu hình Alibaba Cloud (Model Studio) API"
+                >
+                  <Cpu size={11} /> {settings.alibabacloudModel || 'Qwen Plus'}
+                </span>
+              ) : settings.provider === 'openrouter' ? (
+                <span
+                  className="badge"
+                  style={{
+                    cursor: 'pointer',
+                    background: 'rgba(168, 85, 247, 0.25)',
+                    color: '#e9d5ff',
+                    border: '1px solid #a855f7',
+                  }}
+                  onClick={onOpenSettings}
+                  title="Bấm để cấu hình OpenRouter (Qwen) API"
+                >
+                  <Cpu size={11} /> {settings.openrouterModel || 'Qwen 3.8'}
+                </span>
+              ) : settings.provider === 'claude' ? (
                 <span
                   className="badge badge-amber"
                   style={{ cursor: 'pointer' }}

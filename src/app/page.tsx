@@ -65,10 +65,17 @@ const DEFAULT_SETTINGS: TeacherSettings = {
   geminiModel: 'gemini-3.8-flash',
   claudeApiKey: '',
   claudeModel: 'claude-sonnet-4-6',
-  claudeBaseUrl: 'https://api.anthropic.com/v1',
+  claudeBaseUrl: 'https://claudecode.pimath.id.vn/v1',
   openaiApiKey: '',
   openaiModel: 'gpt-4o',
   openaiBaseUrl: 'https://api.openai.com/v1',
+  openrouterApiKey: '',
+  openrouterModel: 'qwen/qwen3.8-27b:free',
+  openrouterBaseUrl: 'https://openrouter.ai/api/v1',
+  openrouterReasoning: true,
+  alibabacloudApiKey: '',
+  alibabacloudModel: 'qwen-plus-character',
+  alibabacloudBaseUrl: 'https://ws-oxwvfx79avt7ebq3.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1',
   model: 'gemini-3.8-flash',
 };
 
@@ -99,8 +106,13 @@ export default function Home() {
           'claude-3-opus-20240229',
         ];
         let claudeModel = parsed.claudeModel || DEFAULT_SETTINGS.claudeModel;
-        if (legacyClaudeModels.includes(claudeModel)) {
+        if (legacyClaudeModels.includes(claudeModel) || claudeModel === 'claude-haiku-4-5-20251001') {
           claudeModel = 'claude-sonnet-4-6';
+        }
+
+        let claudeBaseUrl = parsed.claudeBaseUrl || DEFAULT_SETTINGS.claudeBaseUrl;
+        if (!claudeBaseUrl || claudeBaseUrl === 'https://api.anthropic.com/v1') {
+          claudeBaseUrl = 'https://claudecode.pimath.id.vn/v1';
         }
 
         setSettings({
@@ -115,8 +127,15 @@ export default function Home() {
           geminiModel: parsed.geminiModel || parsed.model || DEFAULT_SETTINGS.geminiModel,
           claudeModel,
           openaiModel: parsed.openaiModel || DEFAULT_SETTINGS.openaiModel,
-          claudeBaseUrl: parsed.claudeBaseUrl || DEFAULT_SETTINGS.claudeBaseUrl,
+          openrouterModel: parsed.openrouterModel || DEFAULT_SETTINGS.openrouterModel,
+          claudeBaseUrl,
           openaiBaseUrl: parsed.openaiBaseUrl || DEFAULT_SETTINGS.openaiBaseUrl,
+          openrouterBaseUrl: parsed.openrouterBaseUrl || DEFAULT_SETTINGS.openrouterBaseUrl,
+          openrouterReasoning: parsed.openrouterReasoning !== false,
+          openrouterApiKey: parsed.openrouterApiKey || '',
+          alibabacloudModel: parsed.alibabacloudModel || DEFAULT_SETTINGS.alibabacloudModel,
+          alibabacloudBaseUrl: parsed.alibabacloudBaseUrl || DEFAULT_SETTINGS.alibabacloudBaseUrl,
+          alibabacloudApiKey: parsed.alibabacloudApiKey || '',
         });
       }
     } catch (e) {

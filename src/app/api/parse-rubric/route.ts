@@ -5,6 +5,8 @@ import {
   parseRubricWithGemini,
   parseRubricWithClaude,
   parseRubricWithOpenAI,
+  parseRubricWithOpenRouter,
+  parseRubricWithAlibabaCloud,
 } from '@/utils/rubricParser';
 
 export async function POST(req: NextRequest) {
@@ -65,6 +67,52 @@ export async function POST(req: NextRequest) {
           }
         } catch (aiErr: any) {
           console.error('Claude rubric parsing failed, falling back to smart heuristic:', aiErr);
+        }
+      }
+    } else if (provider === 'alibabacloud') {
+      const alibabaKey = (
+        req.headers.get('x-alibabacloud-api-key') ||
+        process.env.ALIBABACLOUD_API_KEY ||
+        ''
+      ).trim();
+      const alibabaModel = req.headers.get('x-alibabacloud-model') || bodyModel || process.env.ALIBABACLOUD_MODEL || 'qwen-plus-character';
+      const alibabaBaseUrl = req.headers.get('x-alibabacloud-base-url') || bodyBaseUrl || process.env.ALIBABACLOUD_BASE_URL || 'https://ws-oxwvfx79avt7ebq3.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1';
+
+      if (alibabaKey) {
+        try {
+          const aiRubric = await parseRubricWithAlibabaCloud(text, tables, fileName, alibabaKey, alibabaModel, alibabaBaseUrl);
+          if (aiRubric.criteria && aiRubric.criteria.length > 0) {
+            return NextResponse.json({
+              success: true,
+              rubric: aiRubric,
+              mode: 'alibabacloud',
+            });
+          }
+        } catch (aiErr: any) {
+          console.error('Alibaba Cloud rubric parsing failed, falling back to smart heuristic:', aiErr);
+        }
+      }
+    } else if (provider === 'openrouter') {
+      const openrouterKey = (
+        req.headers.get('x-openrouter-api-key') ||
+        process.env.OPENROUTER_API_KEY ||
+        ''
+      ).trim();
+      const openrouterModel = req.headers.get('x-openrouter-model') || bodyModel || process.env.OPENROUTER_MODEL || 'qwen/qwen3.8-27b:free';
+      const openrouterBaseUrl = req.headers.get('x-openrouter-base-url') || bodyBaseUrl || process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
+
+      if (openrouterKey) {
+        try {
+          const aiRubric = await parseRubricWithOpenRouter(text, tables, fileName, openrouterKey, openrouterModel, openrouterBaseUrl);
+          if (aiRubric.criteria && aiRubric.criteria.length > 0) {
+            return NextResponse.json({
+              success: true,
+              rubric: aiRubric,
+              mode: 'openrouter',
+            });
+          }
+        } catch (aiErr: any) {
+          console.error('OpenRouter rubric parsing failed, falling back to smart heuristic:', aiErr);
         }
       }
     } else if (provider === 'openai') {

@@ -34,6 +34,7 @@ export interface ModelEvaluation {
   strengths?: string[];
   weaknesses?: string[];
   teacherComment?: string;
+  reasoningText?: string;
   error?: string;
 }
 
@@ -69,6 +70,10 @@ export interface GradingResult {
   // Báo cáo đối chiếu 3 Model (nếu dùng chế độ Triple-Model Consensus)
   consensusReport?: ConsensusReport;
   ocrComparison?: OcrComparisonReport;
+
+  // Hỗ trợ lưu trữ suy luận (Reasoning Details) từ mô hình Qwen / OpenRouter
+  reasoningDetails?: unknown;
+  reasoningText?: string;
 
   // Tương thích ngược nếu còn dữ liệu cũ
   stepByStepAnalysis?: string;
@@ -112,7 +117,7 @@ export interface StudentSubmission {
   stepMessage?: string;
 }
 
-export type AIProvider = 'gemini' | 'claude' | 'openai';
+export type AIProvider = 'gemini' | 'claude' | 'openai' | 'openrouter' | 'alibabacloud';
 export type GradingMode = 'single' | 'triple_consensus';
 
 export interface TeacherSettings {
@@ -142,7 +147,19 @@ export interface TeacherSettings {
   openaiModel: string;
   openaiBaseUrl?: string;
 
+  // OpenRouter (Qwen: qwen/qwen3.8-27b:free, qwen/qwen-2.5-vl-72b-instruct:free,...)
+  openrouterApiKey?: string;
+  openrouterModel?: string;
+  openrouterBaseUrl?: string;
+  openrouterReasoning?: boolean;
+
+  // Alibaba Cloud Model Studio (Qwen)
+  alibabacloudApiKey?: string;
+  alibabacloudModel?: string;
+  alibabacloudBaseUrl?: string;
+
   // Tương thích ngược với cấu hình cũ
   model?: string;
 }
+
 

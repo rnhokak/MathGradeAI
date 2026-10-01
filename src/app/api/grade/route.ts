@@ -28,29 +28,39 @@ export async function POST(req: NextRequest) {
     const envGemini = (process.env.GEMINI_API_KEY || '').trim();
     const envClaude = (process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '').trim();
     const envOpenai = (process.env.OPENAI_API_KEY || '').trim();
+    const envOpenrouter = (process.env.OPENROUTER_API_KEY || '').trim();
+    const envAlibaba = (process.env.ALIBABACLOUD_API_KEY || '').trim();
 
     // Client provided keys
     const clientGemini = (req.headers.get('x-gemini-api-key') || settings?.geminiApiKey || '').trim();
     const clientClaude = (req.headers.get('x-claude-api-key') || settings?.claudeApiKey || '').trim();
     const clientOpenai = (req.headers.get('x-openai-api-key') || settings?.openaiApiKey || '').trim();
+    const clientOpenrouter = (req.headers.get('x-openrouter-api-key') || settings?.openrouterApiKey || '').trim();
+    const clientAlibaba = (req.headers.get('x-alibabacloud-api-key') || settings?.alibabacloudApiKey || '').trim();
 
     const geminiKey = clientGemini || envGemini;
     const claudeKey = clientClaude || envClaude;
     const openaiKey = clientOpenai || envOpenai;
+    const openrouterKey = clientOpenrouter || envOpenrouter;
+    const alibabaKey = clientAlibaba || envAlibaba;
 
     // Server environment backup keys (used if client keys are invalid/malformed)
     const backupKeys = {
       gemini: envGemini && envGemini !== clientGemini ? envGemini : undefined,
       claude: envClaude && envClaude !== clientClaude ? envClaude : undefined,
       openai: envOpenai && envOpenai !== clientOpenai ? envOpenai : undefined,
+      openrouter: envOpenrouter && envOpenrouter !== clientOpenrouter ? envOpenrouter : undefined,
+      alibabacloud: envAlibaba && envAlibaba !== clientAlibaba ? envAlibaba : undefined,
     };
 
-    // Mode 1: Triple-Model Consensus (Gemini + Claude + OpenAI)
+    // Mode 1: Triple-Model Consensus (Gemini + Claude + OpenAI + OpenRouter + Alibaba Cloud)
     if (gradingMode === 'triple_consensus') {
       const availableKeys = {
         gemini: geminiKey,
         claude: claudeKey,
         openai: openaiKey,
+        openrouter: openrouterKey,
+        alibabacloud: alibabaKey,
       };
 
       const keyCount = Object.values(availableKeys).filter(Boolean).length;
@@ -58,7 +68,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             error:
-              'Chưa cấu hình API Key nào trong Cài Đặt hoặc .env.local (cần ít nhất API Key của Gemini, Claude hoặc OpenAI để chấm đối chiếu).',
+              'Chưa cấu hình API Key nào trong Cài Đặt hoặc .env.local (cần ít nhất API Key của Gemini, Claude, OpenAI, OpenRouter hoặc Alibaba Cloud để chấm đối chiếu).',
           },
           { status: 400 }
         );
@@ -87,7 +97,31 @@ export async function POST(req: NextRequest) {
     let apiKey = '';
     let backupApiKey: string | undefined = undefined;
 
-    if (provider === 'claude') {
+    if (provider === 'alibabacloud') {
+      apiKey = alibabaKey;
+      backupApiKey = backupKeys.alibabacloud;
+      if (!apiKey) {
+        return NextResponse.json(
+          {
+            error:
+              'Chưa cấu hình Alibaba Cloud Model Studio API Key. Vui lòng bấm vào Cài Đặt (chọn tab Alibaba Cloud) để nhập API Key, hoặc khai báo ALIBABACLOUD_API_KEY trong file .env.local.',
+          },
+          { status: 400 }
+        );
+      }
+    } else if (provider === 'openrouter') {
+      apiKey = openrouterKey;
+      backupApiKey = backupKeys.openrouter;
+      if (!apiKey) {
+        return NextResponse.json(
+          {
+            error:
+              'Chưa cấu hình OpenRouter API Key. Vui lòng bấm vào Cài Đặt (chọn tab OpenRouter) để nhập API Key, hoặc khai báo OPENROUTER_API_KEY trong file .env.local.',
+          },
+          { status: 400 }
+        );
+      }
+    } else if (provider === 'claude') {
       apiKey = claudeKey;
       backupApiKey = backupKeys.claude;
       if (!apiKey) {

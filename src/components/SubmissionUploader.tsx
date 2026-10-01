@@ -194,6 +194,8 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
           ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
           ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
           ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
+          ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
+          ...(settings.alibabacloudApiKey ? { 'x-alibabacloud-api-key': settings.alibabacloudApiKey } : {}),
         },
         body: JSON.stringify({
           submission: sub,
@@ -268,6 +270,8 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
           ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
           ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
           ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
+          ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
+          ...(settings.alibabacloudApiKey ? { 'x-alibabacloud-api-key': settings.alibabacloudApiKey } : {}),
         },
         body: JSON.stringify({
           submission: sub,

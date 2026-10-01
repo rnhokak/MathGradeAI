@@ -48,11 +48,17 @@ export const RubricManager: React.FC<RubricManagerProps> = ({
       if (settings?.geminiApiKey) headers['x-gemini-api-key'] = settings.geminiApiKey;
       if (settings?.claudeApiKey) headers['x-claude-api-key'] = settings.claudeApiKey;
       if (settings?.openaiApiKey) headers['x-openai-api-key'] = settings.openaiApiKey;
+      if (settings?.openrouterApiKey) headers['x-openrouter-api-key'] = settings.openrouterApiKey;
+      if (settings?.alibabacloudApiKey) headers['x-alibabacloud-api-key'] = settings.alibabacloudApiKey;
       if (settings?.geminiModel) headers['x-gemini-model'] = settings.geminiModel;
       if (settings?.claudeModel) headers['x-claude-model'] = settings.claudeModel;
       if (settings?.openaiModel) headers['x-openai-model'] = settings.openaiModel;
+      if (settings?.openrouterModel) headers['x-openrouter-model'] = settings.openrouterModel;
+      if (settings?.alibabacloudModel) headers['x-alibabacloud-model'] = settings.alibabacloudModel;
       if (settings?.claudeBaseUrl) headers['x-claude-base-url'] = settings.claudeBaseUrl;
       if (settings?.openaiBaseUrl) headers['x-openai-base-url'] = settings.openaiBaseUrl;
+      if (settings?.openrouterBaseUrl) headers['x-openrouter-base-url'] = settings.openrouterBaseUrl;
+      if (settings?.alibabacloudBaseUrl) headers['x-alibabacloud-base-url'] = settings.alibabacloudBaseUrl;
 
       // Try the specialized /api/parse-rubric first (which auto-detects tables & AI)
       let rubricResult: RubricData | null = null;
@@ -138,11 +144,17 @@ export const RubricManager: React.FC<RubricManagerProps> = ({
       if (settings?.geminiApiKey) headers['x-gemini-api-key'] = settings.geminiApiKey;
       if (settings?.claudeApiKey) headers['x-claude-api-key'] = settings.claudeApiKey;
       if (settings?.openaiApiKey) headers['x-openai-api-key'] = settings.openaiApiKey;
+      if (settings?.openrouterApiKey) headers['x-openrouter-api-key'] = settings.openrouterApiKey;
+      if (settings?.alibabacloudApiKey) headers['x-alibabacloud-api-key'] = settings.alibabacloudApiKey;
       if (settings?.geminiModel) headers['x-gemini-model'] = settings.geminiModel;
       if (settings?.claudeModel) headers['x-claude-model'] = settings.claudeModel;
       if (settings?.openaiModel) headers['x-openai-model'] = settings.openaiModel;
+      if (settings?.openrouterModel) headers['x-openrouter-model'] = settings.openrouterModel;
+      if (settings?.alibabacloudModel) headers['x-alibabacloud-model'] = settings.alibabacloudModel;
       if (settings?.claudeBaseUrl) headers['x-claude-base-url'] = settings.claudeBaseUrl;
       if (settings?.openaiBaseUrl) headers['x-openai-base-url'] = settings.openaiBaseUrl;
+      if (settings?.openrouterBaseUrl) headers['x-openrouter-base-url'] = settings.openrouterBaseUrl;
+      if (settings?.alibabacloudBaseUrl) headers['x-alibabacloud-base-url'] = settings.alibabacloudBaseUrl;
 
       const res = await fetch('/api/parse-rubric', {
         method: 'POST',
@@ -152,13 +164,21 @@ export const RubricManager: React.FC<RubricManagerProps> = ({
           fileName: rubric.title,
           provider: activeProvider,
           model:
-            activeProvider === 'claude'
+            activeProvider === 'alibabacloud'
+              ? settings?.alibabacloudModel
+              : activeProvider === 'openrouter'
+              ? settings?.openrouterModel
+              : activeProvider === 'claude'
               ? settings?.claudeModel
               : activeProvider === 'openai'
               ? settings?.openaiModel
               : settings?.geminiModel,
           baseUrl:
-            activeProvider === 'claude'
+            activeProvider === 'alibabacloud'
+              ? settings?.alibabacloudBaseUrl
+              : activeProvider === 'openrouter'
+              ? settings?.openrouterBaseUrl
+              : activeProvider === 'claude'
               ? settings?.claudeBaseUrl
               : activeProvider === 'openai'
               ? settings?.openaiBaseUrl

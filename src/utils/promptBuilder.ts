@@ -96,10 +96,15 @@ export function buildOcrConsensusPrompt(
   geminiText: string,
   claudeText: string,
   openaiText: string,
-  studentName?: string
+  studentName?: string,
+  qwenText?: string
 ): string {
+  const model4Section = qwenText
+    ? `\n=== KẾT QUẢ OCR TỪ MODEL (Qwen / OpenRouter / Alibaba Cloud) ===\n${qwenText}\n`
+    : '';
+
   return `Bạn là Trọng tài AI chuyên gia thẩm định và đối chiếu văn bản Toán học viết tay.
-Dưới đây là kết quả phiên âm OCR từ 3 mô hình AI khác nhau (Google Gemini, Anthropic Claude, OpenAI GPT-4o) cho cùng một bài làm viết tay môn Toán của học sinh ${studentName ? `"${studentName}"` : ''}.
+Dưới đây là kết quả phiên âm OCR từ các mô hình AI khác nhau (Google Gemini, Anthropic Claude, OpenAI, Qwen / OpenRouter / Alibaba Cloud) cho cùng một bài làm viết tay môn Toán của học sinh ${studentName ? `"${studentName}"` : ''}.
 
 === KẾT QUẢ OCR TỪ MODEL 1 (Google Gemini) ===
 ${geminiText || '(Không có kết quả)'}
@@ -109,7 +114,7 @@ ${claudeText || '(Không có kết quả)'}
 
 === KẾT QUẢ OCR TỪ MODEL 3 (OpenAI GPT-4o / Model 3) ===
 ${openaiText || '(Không có kết quả)'}
-
+${model4Section}
 ═══════════════════════════════════════════════════════════
 NHIỆM VỤ ĐỐI CHIẾU & HỢP NHẤT (CONSENSUS)
 ═══════════════════════════════════════════════════════════

@@ -1,5 +1,6 @@
 import { RubricData, RubricCriterion } from '@/types/grading';
 import { GoogleGenAI } from '@google/genai';
+import { resolveClaudeEndpoint } from '@/utils/aiGrading';
 
 /**
  * Extracts numeric points from a string (e.g., "0,25", "0.25đ", "0.5 điểm", "(0.25)", "[1.0]")
@@ -389,8 +390,8 @@ LƯU Ý:
 2. Tổng điểm "totalPoints" phải bằng tổng "points" của tất cả các tiêu chí trong "criteria".
 3. Chỉ trả về JSON hợp lệ, không giải thích thêm.`;
 
-  const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
-  const response = await fetch(`${cleanBaseUrl}/messages`, {
+  const endpointUrl = resolveClaudeEndpoint(baseUrl);
+  const response = await fetch(endpointUrl, {
     method: 'POST',
     headers: {
       'x-api-key': apiKey,
@@ -400,6 +401,7 @@ LƯU Ý:
     body: JSON.stringify({
       model: effectiveModel,
       max_tokens: 4096,
+      stream: false,
       temperature: 0.1,
       messages: [{ role: 'user', content: prompt }],
     }),
@@ -410,8 +412,16 @@ LƯU Ý:
   }
 
   const data = await response.json();
-  const textOutput =
-    data.content?.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n') || '';
+  let textOutput = '';
+  if (Array.isArray(data.content)) {
+    textOutput = data.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n');
+  } else if (typeof data.content === 'string') {
+    textOutput = data.content;
+  } else if (data.choices && data.choices[0]?.message) {
+    textOutput = data.choices[0].message.content || '';
+  } else if (data.choices && data.choices[0]?.text) {
+    textOutput = data.choices[0].text;
+  }
 
   const cleanJson = textOutput.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
   let parsed: any;
@@ -510,4 +520,185 @@ LƯU Ý:
 
   return formatParsedRubric(parsed, fileName, text);
 }
+
+/**
+ * Parse rubric using OpenRouter (Qwen: qwen/qwen3.8-27b:free, qwen/qwen-2.5-72b-instruct, etc.)
+ */
+export async function parseRubricWithOpenRouter(
+  text: string,
+  tables: string[][][],
+  fileName?: string,
+  apiKey?: string,
+  modelName: string = 'qwen/qwen3.8-27b:free',
+  baseUrl: string = 'https://openrouter.ai/api/v1'
+): Promise<RubricData> {
+  if (!apiKey) {
+    throw new Error('Chưa cấu hình OpenRouter API Key.');
+  }
+
+  const tableSummary = tables
+    .map((table, tIdx) => {
+      const rows = table.map((row) => row.join(' | ')).join('\n');
+      return `[Bảng ${tIdx + 1}]:\n${rows}`;
+    })
+    .join('\n\n');
+
+  const prompt = `Bạn là chuyên gia sư phạm Toán học hàng đầu tại Việt Nam.
+Nhiệm vụ của bạn là phân tích và cấu trúc hóa toàn bộ thang điểm / đáp án / biểu điểm chi tiết (Rubric) của đề thi tự luận môn Toán dưới đây thành cấu trúc tiêu chí chấm điểm chuẩn mực.
+
+Nội dung văn bản:
+"""
+${text.substring(0, 10000)}
+"""
+
+Nội dung bảng biểu trích xuất từ file:
+"""
+${tableSummary.substring(0, 10000)}
+"""
+
+HÃY TRẢ VỀ DUY NHẤT MỘT ĐỐI TƯỢNG JSON VỚI CẤU TRÚC:
+{
+  "title": "Tên câu hỏi hoặc bài thi (ví dụ: Câu 1. Giải phương trình logarit)",
+  "problemStatement": "Nội dung đầy đủ của câu hỏi / đề bài toán và đáp án chuẩn (giữ nguyên công thức toán dạng LaTeX $...$)",
+  "totalPoints": 1.0,
+  "criteria": [
+    {
+      "id": "crit-1",
+      "name": "Tên ngắn gọn của ý/bước giải",
+      "points": 0.25,
+      "description": "Yêu cầu chi tiết, điều kiện để cho điểm ý này"
+    }
+  ]
+}
+
+LƯU Ý:
+1. Không bỏ sót bất kỳ ý chấm nào trong bảng đáp án / biểu điểm.
+2. Tổng điểm "totalPoints" phải bằng tổng "points" của tất cả các tiêu chí trong "criteria".
+3. Chỉ trả về JSON hợp lệ, không giải thích thêm.`;
+
+  const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+  const response = await fetch(`${cleanBaseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://mathgrade.ai',
+      'X-Title': 'MathGrade AI',
+    },
+    body: JSON.stringify({
+      model: modelName,
+      temperature: 0.1,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenRouter API parse rubric error (${response.status}): ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const textOutput = data.choices?.[0]?.message?.content || '';
+  const cleanJson = textOutput.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleanJson);
+  } catch {
+    const match = cleanJson.match(/\{[\s\S]*\}/);
+    if (match) parsed = JSON.parse(match[0]);
+    else throw new Error('Không thể parse JSON từ OpenRouter rubric');
+  }
+
+  return formatParsedRubric(parsed, fileName || '', text);
+}
+
+/**
+ * Parse rubric using Alibaba Cloud Model Studio (Qwen)
+ */
+export async function parseRubricWithAlibabaCloud(
+  text: string,
+  tables: string[][][],
+  fileName?: string,
+  apiKey?: string,
+  modelName: string = 'qwen-plus-character',
+  baseUrl: string = 'https://ws-oxwvfx79avt7ebq3.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1'
+): Promise<RubricData> {
+  if (!apiKey) {
+    throw new Error('Chưa cấu hình Alibaba Cloud Model Studio API Key.');
+  }
+
+  const tableSummary = tables
+    .map((table, tIdx) => {
+      const rows = table.map((row) => row.join(' | ')).join('\n');
+      return `[Bảng ${tIdx + 1}]:\n${rows}`;
+    })
+    .join('\n\n');
+
+  const prompt = `Bạn là chuyên gia sư phạm Toán học hàng đầu tại Việt Nam.
+Nhiệm vụ của bạn là phân tích và cấu trúc hóa toàn bộ thang điểm / đáp án / biểu điểm chi tiết (Rubric) của đề thi tự luận môn Toán dưới đây thành cấu trúc tiêu chí chấm điểm chuẩn mực.
+
+Nội dung văn bản:
+"""
+${text.substring(0, 10000)}
+"""
+
+Nội dung bảng biểu trích xuất từ file:
+"""
+${tableSummary.substring(0, 10000)}
+"""
+
+HÃY TRẢ VỀ DUY NHẤT MỘT ĐỐI TƯỢNG JSON VỚI CẤU TRÚC:
+{
+  "title": "Tên câu hỏi hoặc bài thi (ví dụ: Câu 1. Giải phương trình logarit)",
+  "problemStatement": "Nội dung đầy đủ của câu hỏi / đề bài toán và đáp án chuẩn (giữ nguyên công thức toán dạng LaTeX $...$)",
+  "totalPoints": 1.0,
+  "criteria": [
+    {
+      "id": "crit-1",
+      "name": "Tên ngắn gọn của ý/bước giải",
+      "points": 0.25,
+      "description": "Yêu cầu chi tiết, điều kiện để cho điểm ý này"
+    }
+  ]
+}
+
+LƯU Ý:
+1. Không bỏ sót bất kỳ ý chấm nào trong bảng đáp án / biểu điểm.
+2. Tổng điểm "totalPoints" phải bằng tổng "points" của tất cả các tiêu chí trong "criteria".
+3. Chỉ trả về JSON hợp lệ, không giải thích thêm.`;
+
+  const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+  const response = await fetch(`${cleanBaseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: modelName,
+      temperature: 0.1,
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Alibaba Cloud API parse rubric error (${response.status}): ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const textOutput = data.choices?.[0]?.message?.content || '';
+  const cleanJson = textOutput.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleanJson);
+  } catch {
+    const match = cleanJson.match(/\{[\s\S]*\}/);
+    if (match) parsed = JSON.parse(match[0]);
+    else throw new Error('Không thể parse JSON từ Alibaba Cloud rubric');
+  }
+
+  return formatParsedRubric(parsed, fileName || '', text);
+}
+
+
 
