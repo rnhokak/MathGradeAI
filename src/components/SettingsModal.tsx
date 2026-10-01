@@ -37,16 +37,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     ...settings,
     provider: settings.provider || 'claude',
     strictness: settings.strictness || 'strict',
-    gradingMode: settings.gradingMode || 'triple_consensus',
-    autoOcrBeforeGrading: settings.autoOcrBeforeGrading !== false,
+    gradingMode: settings.gradingMode || 'single',
+    autoOcrBeforeGrading: settings.autoOcrBeforeGrading ?? false,
     queueDelayMs: settings.queueDelayMs ?? 2000,
     maxRegradeRetries: settings.maxRegradeRetries ?? 2,
     consensusTolerance: settings.consensusTolerance ?? 0.25,
     geminiModel: settings.geminiModel || settings.model || 'gemini-3.8-flash',
-    claudeModel: settings.claudeModel || 'claude-sonnet-4-6',
+    claudeModel: settings.claudeModel || 'claude-opus-5',
     openaiModel: settings.openaiModel || 'gpt-4o',
-    openrouterModel: settings.openrouterModel || 'qwen/qwen3.8-27b:free',
-    claudeBaseUrl: settings.claudeBaseUrl || 'https://api.anthropic.com/v1',
+    claudeBaseUrl:
+      !settings.claudeBaseUrl ||
+      settings.claudeBaseUrl === 'https://api.anthropic.com/v1' ||
+      settings.claudeBaseUrl.includes('claudecode.pimath.id.vn')
+        ? 'https://apikey.pimath.id.vn/v1'
+        : settings.claudeBaseUrl,
     openaiBaseUrl: settings.openaiBaseUrl || 'https://api.openai.com/v1',
     openrouterBaseUrl: settings.openrouterBaseUrl || 'https://openrouter.ai/api/v1',
     openrouterReasoning: settings.openrouterReasoning !== false,
@@ -319,8 +323,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       Đối Chiếu 3 Model AI
                     </span>
                   </div>
-                  <span className="badge badge-emerald" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
-                    Khuyên dùng
+                  <span className="badge badge-indigo" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
+                    Đối chiếu song song
                   </span>
                 </div>
                 <p style={{ fontSize: '0.75rem', color: '#cbd5e1', lineHeight: 1.4 }}>
@@ -346,16 +350,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   textAlign: 'left',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
+                  boxShadow:
+                    current.gradingMode === 'single'
+                      ? '0 0 16px rgba(6, 182, 212, 0.25)'
+                      : 'none',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                  <Bot size={16} color="#06b6d4" />
-                  <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.88rem' }}>
-                    Chấm 1 Model duy nhất
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '6px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Bot size={16} color="#06b6d4" />
+                    <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.88rem' }}>
+                      Chấm 1 Model duy nhất
+                    </span>
+                  </div>
+                  <span className="badge badge-emerald" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
+                    Mặc định
                   </span>
                 </div>
                 <p style={{ fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.4 }}>
-                  Chỉ gọi 1 nhà cung cấp đã chọn bên dưới (tiết kiệm token, phản hồi nhanh hơn).
+                  Chỉ gọi 1 mô hình đã chọn bên dưới (Mặc định: <strong>Claude Opus 5</strong>). Tiết kiệm token và phản hồi nhanh chóng.
                 </p>
               </button>
             </div>

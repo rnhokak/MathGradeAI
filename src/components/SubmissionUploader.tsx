@@ -165,9 +165,9 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
   // Grade a single submission directly
   const gradeSingleSubmission = async (sub: StudentSubmission) => {
     setActiveSubId(sub.id);
-    const isTriple = (settings.gradingMode || 'triple_consensus') === 'triple_consensus';
+    const isTriple = (settings.gradingMode || 'single') === 'triple_consensus';
     const hasImages = sub.images && sub.images.length > 0;
-    const needsOcr = hasImages && (!sub.extractedText || !sub.ocrComparison) && settings.autoOcrBeforeGrading !== false;
+    const needsOcr = isTriple && hasImages && (!sub.extractedText || !sub.ocrComparison) && settings.autoOcrBeforeGrading !== false;
 
     onUpdateSubmissions((prev) =>
       prev.map((s) =>
@@ -179,7 +179,9 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                 ? 'Bước 1/2: Đang đọc công thức 3 Model AI (Gemini, Claude, GPT-4o)...'
                 : isTriple
                 ? 'Đang chấm đồng thời 3 Model (Gemini, Claude, GPT-4o)...'
-                : 'Đang chấm AI...',
+                : settings.provider === 'claude'
+                ? `Đang chấm bằng ${settings.claudeModel || 'Claude Opus 5'}...`
+                : `Đang chấm bằng ${settings.provider}...`,
               error: undefined,
             }
           : s
@@ -484,7 +486,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
   const pendingCount = displaySubmissions.filter(
     (s) => s.status === 'idle' || s.status === 'error' || s.status === 'queued'
   ).length;
-  const isTripleMode = (settings.gradingMode || 'triple_consensus') === 'triple_consensus';
+  const isTripleMode = (settings.gradingMode || 'single') === 'triple_consensus';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -516,7 +518,11 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
               Hỗ trợ nạp cùng lúc nhiều bài làm (.docx hoặc ảnh viết tay). Hệ thống dùng{' '}
               <strong style={{ color: '#38bdf8' }}>
-                {isTripleMode ? 'Bộ 3 Model AI (Gemini + Claude + GPT-4o) đối chiếu kết quả' : '1 Model AI'}
+                {isTripleMode
+                  ? 'Bộ 3 Model AI (Gemini + Claude + GPT-4o) đối chiếu kết quả'
+                  : settings.provider === 'claude'
+                  ? `Mô hình ${settings.claudeModel || 'Claude Opus 5'}`
+                  : `Mô hình ${settings.provider.toUpperCase()}`}
               </strong>{' '}
               và hàng đợi tuần tự để chấm điểm chính xác nhất.
             </p>
@@ -553,7 +559,11 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                   style={{ fontSize: '0.8rem', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
                   <Sparkles size={13} color={isTripleMode ? '#818cf8' : '#fbbf24'} />
-                  {isTripleMode ? '3 Model Đối Chiếu (Gemini + Claude + GPT-4o)' : `1 Model: ${settings.provider.toUpperCase()}`}
+                  {isTripleMode
+                    ? '3 Model Đối Chiếu (Gemini + Claude + GPT-4o)'
+                    : settings.provider === 'claude'
+                    ? `1 Model: ${settings.claudeModel || 'Claude Opus 5'}`
+                    : `1 Model: ${settings.provider.toUpperCase()}`}
                 </span>
 
                 {/* Start Queue button */}

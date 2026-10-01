@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { StudentSubmission, TeacherSettings } from '@/types/grading';
-import { transcribeWithThreeModelsAndConsensus } from '@/utils/aiGrading';
+import { transcribeWithThreeModelsAndConsensus, resolveClaudeEndpoint } from '@/utils/aiGrading';
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,6 +19,11 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const effectiveSettings: TeacherSettings = {
+      ...(settings || {}),
+      claudeBaseUrl: resolveClaudeEndpoint(settings?.claudeBaseUrl),
+    };
 
     // Retrieve API keys from server env
     const envGemini = (process.env.GEMINI_API_KEY || '').trim();
@@ -69,7 +74,7 @@ export async function POST(req: NextRequest) {
 
     const { ocrComparison, consensusText } = await transcribeWithThreeModelsAndConsensus(
       submission,
-      settings,
+      effectiveSettings,
       availableKeys,
       backupKeys
     );

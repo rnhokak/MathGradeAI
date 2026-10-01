@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { RubricData, StudentSubmission, TeacherSettings } from '@/types/grading';
-import { gradeWithProvider, gradeWithThreeModelsAndConsensus } from '@/utils/aiGrading';
+import { gradeWithProvider, gradeWithThreeModelsAndConsensus, resolveClaudeEndpoint } from '@/utils/aiGrading';
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,7 +22,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const gradingMode = settings?.gradingMode || 'triple_consensus';
+    // Always normalize claudeBaseUrl to prevent any legacy /v1/messages proxy errors
+    const effectiveSettings: TeacherSettings = {
+      ...(settings || {}),
+      claudeBaseUrl: resolveClaudeEndpoint(settings?.claudeBaseUrl),
+    };
+
+    const gradingMode = effectiveSettings?.gradingMode || 'single';
 
     // Retrieve API keys from server env
     const envGemini = (process.env.GEMINI_API_KEY || '').trim();
@@ -77,7 +83,7 @@ export async function POST(req: NextRequest) {
       const { gradingResult, consensusReport } = await gradeWithThreeModelsAndConsensus(
         submission,
         rubric,
-        settings,
+        effectiveSettings,
         availableKeys,
         backupKeys
       );
@@ -93,7 +99,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Mode 2: Single model provider
-    const provider = settings?.provider || 'claude';
+    const provider = effectiveSettings?.provider || 'claude';
     let apiKey = '';
     let backupApiKey: string | undefined = undefined;
 
@@ -162,7 +168,7 @@ export async function POST(req: NextRequest) {
     const { gradingResult, modelUsed } = await gradeWithProvider(
       submission,
       rubric,
-      settings,
+      effectiveSettings,
       apiKey,
       backupApiKey
     );

@@ -1,6 +1,6 @@
 import { RubricData, RubricCriterion } from '@/types/grading';
 import { GoogleGenAI } from '@google/genai';
-import { resolveClaudeEndpoint } from '@/utils/aiGrading';
+import { resolveClaudeEndpoint, extractJsonFromText } from '@/utils/aiGrading';
 
 /**
  * Extracts numeric points from a string (e.g., "0,25", "0.25đ", "0.5 điểm", "(0.25)", "[1.0]")
@@ -340,8 +340,8 @@ export async function parseRubricWithClaude(
   tables: string[][][],
   fileName: string,
   apiKey: string,
-  modelName: string = 'claude-sonnet-4-6',
-  baseUrl: string = 'https://api.anthropic.com/v1'
+  modelName: string = 'claude-opus-5',
+  baseUrl: string = 'https://apikey.pimath.id.vn/v1'
 ): Promise<RubricData> {
   const legacyClaudeModels = [
     'claude-3-7-sonnet-20250219',
@@ -349,7 +349,7 @@ export async function parseRubricWithClaude(
     'claude-3-5-haiku-20241022',
     'claude-3-opus-20240229',
   ];
-  const effectiveModel = legacyClaudeModels.includes(modelName) ? 'claude-sonnet-4-6' : modelName;
+  const effectiveModel = legacyClaudeModels.includes(modelName) ? 'claude-opus-5' : modelName;
   const tableSummary = tables
     .map(
       (t, idx) =>
@@ -423,15 +423,7 @@ LƯU Ý:
     textOutput = data.choices[0].text;
   }
 
-  const cleanJson = textOutput.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
-  let parsed: any;
-  try {
-    parsed = JSON.parse(cleanJson);
-  } catch {
-    const match = cleanJson.match(/\{[\s\S]*\}/);
-    if (match) parsed = JSON.parse(match[0]);
-    else throw new Error('Không thể parse JSON từ Claude rubric');
-  }
+  const parsed = extractJsonFromText(textOutput);
 
   return formatParsedRubric(parsed, fileName, text);
 }
@@ -508,15 +500,7 @@ LƯU Ý:
 
   const data = await response.json();
   const textOutput = data.choices?.[0]?.message?.content || '';
-  const cleanJson = textOutput.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
-  let parsed: any;
-  try {
-    parsed = JSON.parse(cleanJson);
-  } catch {
-    const match = cleanJson.match(/\{[\s\S]*\}/);
-    if (match) parsed = JSON.parse(match[0]);
-    else throw new Error('Không thể parse JSON từ OpenAI rubric');
-  }
+  const parsed = extractJsonFromText(textOutput);
 
   return formatParsedRubric(parsed, fileName, text);
 }
@@ -598,15 +582,7 @@ LƯU Ý:
 
   const data = await response.json();
   const textOutput = data.choices?.[0]?.message?.content || '';
-  const cleanJson = textOutput.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
-  let parsed: any;
-  try {
-    parsed = JSON.parse(cleanJson);
-  } catch {
-    const match = cleanJson.match(/\{[\s\S]*\}/);
-    if (match) parsed = JSON.parse(match[0]);
-    else throw new Error('Không thể parse JSON từ OpenRouter rubric');
-  }
+  const parsed = extractJsonFromText(textOutput);
 
   return formatParsedRubric(parsed, fileName || '', text);
 }
@@ -687,15 +663,7 @@ LƯU Ý:
 
   const data = await response.json();
   const textOutput = data.choices?.[0]?.message?.content || '';
-  const cleanJson = textOutput.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
-  let parsed: any;
-  try {
-    parsed = JSON.parse(cleanJson);
-  } catch {
-    const match = cleanJson.match(/\{[\s\S]*\}/);
-    if (match) parsed = JSON.parse(match[0]);
-    else throw new Error('Không thể parse JSON từ Alibaba Cloud rubric');
-  }
+  const parsed = extractJsonFromText(textOutput);
 
   return formatParsedRubric(parsed, fileName || '', text);
 }

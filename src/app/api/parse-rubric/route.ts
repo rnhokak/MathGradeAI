@@ -52,8 +52,8 @@ export async function POST(req: NextRequest) {
         process.env.CLAUDE_API_KEY ||
         ''
       ).trim();
-      const claudeModel = req.headers.get('x-claude-model') || bodyModel || process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
-      const claudeBaseUrl = req.headers.get('x-claude-base-url') || bodyBaseUrl || process.env.CLAUDE_BASE_URL || 'https://api.anthropic.com/v1';
+      const claudeModel = req.headers.get('x-claude-model') || bodyModel || process.env.CLAUDE_MODEL || 'claude-opus-5';
+      const claudeBaseUrl = req.headers.get('x-claude-base-url') || bodyBaseUrl || process.env.CLAUDE_BASE_URL || 'https://apikey.pimath.id.vn/v1';
 
       if (claudeKey) {
         try {

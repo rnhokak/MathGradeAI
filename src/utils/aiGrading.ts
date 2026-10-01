@@ -55,6 +55,38 @@ export function createAlibabaCloudClient(apiKey: string, baseUrl?: string): Open
 }
 
 /**
+ * Chuẩn hóa ảnh base64 theo Section 5 của tài liệu Anthropic Messages API:
+ * - Tách phần metadata data:...;base64, nếu có
+ * - Bỏ mọi ký tự khoảng trắng / xuống dòng thừa
+ * - Chuẩn hóa media_type (image/png, image/jpeg, image/webp, image/gif)
+ */
+export function normalizeBase64Image(input: string): { mime: string; data: string } {
+  const trimmed = (input || '').trim();
+  const commaIdx = trimmed.indexOf(',');
+  if (trimmed.startsWith('data:') && commaIdx !== -1) {
+    const meta = trimmed.slice(5, commaIdx);
+    const mimeMatch = meta.match(/^([^;]+)/);
+    let mime = mimeMatch ? mimeMatch[1].toLowerCase().trim() : 'image/png';
+    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mime)) {
+      mime = 'image/png';
+    }
+    const cleanData = trimmed.slice(commaIdx + 1).replace(/\s+/g, '');
+    return { mime, data: cleanData };
+  }
+
+  // Pure base64
+  let mime = 'image/png';
+  if (trimmed.startsWith('/9j/')) {
+    mime = 'image/jpeg';
+  } else if (trimmed.startsWith('R0lGOD')) {
+    mime = 'image/gif';
+  } else if (trimmed.startsWith('UklGR')) {
+    mime = 'image/webp';
+  }
+  return { mime, data: trimmed.replace(/\s+/g, '') };
+}
+
+/**
  * Chuẩn hóa URL endpoint cho Claude API (tương thích Anthropic Messages API và proxy apikey.pimath.id.vn)
  */
 export function resolveClaudeEndpoint(rawBaseUrl?: string): string {
@@ -70,28 +102,24 @@ export function resolveClaudeEndpoint(rawBaseUrl?: string): string {
     url = `https://${url}`;
   }
 
-  // Nếu đã kết thúc bằng /messages
+  // Bất kỳ URL nào liên quan đến pimath.id.vn (kể cả apikey.pimath.id.vn hay claudecode.pimath.id.vn, /v1, /v1/messages...)
+  // bắt buộc phải trỏ về endpoint chuẩn Anthropic Messages: https://apikey.pimath.id.vn/anthropic/v1/messages
+  // Tuyệt đối không gọi /v1/messages trên pimath vì sẽ bị lỗi 500: Failed to create chat: no chat ID returned
+  if (url.toLowerCase().includes('pimath.id.vn')) {
+    const target = 'https://apikey.pimath.id.vn/anthropic/v1/messages';
+    console.log(`[CLAUDE_RESOLVER] pimath detected: raw="${rawBaseUrl}" -> target="${target}"`);
+    return target;
+  }
+
   if (url.endsWith('/messages')) {
     return url;
   }
 
-  // Host apikey.pimath.id.vn
-  if (url.includes('apikey.pimath.id.vn')) {
-    if (url.endsWith('/anthropic/v1') || url.endsWith('/anthropic')) {
-      return `${url.replace(/\/anthropic(\/v1)?$/, '')}/v1/messages`;
-    }
-    if (url.endsWith('/v1')) {
-      return `${url}/messages`;
-    }
-    return `${url}/v1/messages`;
-  }
-
-  // Anthropic tiêu chuẩn hoặc proxy khác
   if (url.endsWith('/v1')) {
     return `${url}/messages`;
   }
 
-  return `${url}/messages`;
+  return `${url}/v1/messages`;
 }
 
 
@@ -100,85 +128,183 @@ export function resolveClaudeEndpoint(rawBaseUrl?: string): string {
  */
 /**
  * Attempts to repair a truncated JSON string by closing unclosed braces/brackets
- * and trimming dangling incomplete fields.
+ * using a LIFO stack in reverse order of opening.
  */
 function repairTruncatedJson(raw: string): string {
-  // Remove trailing incomplete key-value pair that caused truncation
-  // e.g., ..."field": "incomplete string  → strip back to last valid comma or {
   let s = raw.trimEnd();
 
-  // Remove trailing comma before trying to close
-  s = s.replace(/,\s*$/, '');
+  // Strip trailing incomplete key or dangling colon
+  s = s
+    .replace(/,\s*"[^"]*"\s*:\s*$/, '')
+    .replace(/,\s*"[^"]*"\s*$/, '')
+    .replace(/,\s*$/, '');
 
-  // Count unclosed braces and brackets
-  let braces = 0;
-  let brackets = 0;
-  let inString = false;
-  let escaped = false;
+  const openStack: string[] = [];
+  let inStr = false;
+  let isEsc = false;
 
   for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
-    if (escaped) { escaped = false; continue; }
-    if (ch === '\\' && inString) { escaped = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
-    if (inString) continue;
-    if (ch === '{') braces++;
-    else if (ch === '}') braces--;
-    else if (ch === '[') brackets++;
-    else if (ch === ']') brackets--;
+    const c = s[i];
+    if (isEsc) {
+      isEsc = false;
+      continue;
+    }
+    if (c === '\\' && inStr) {
+      isEsc = true;
+      continue;
+    }
+    if (c === '"') {
+      inStr = !inStr;
+      continue;
+    }
+    if (inStr) continue;
+
+    if (c === '{' || c === '[') {
+      openStack.push(c);
+    } else if (c === '}') {
+      if (openStack.length > 0 && openStack[openStack.length - 1] === '{') {
+        openStack.pop();
+      }
+    } else if (c === ']') {
+      if (openStack.length > 0 && openStack[openStack.length - 1] === '[') {
+        openStack.pop();
+      }
+    }
   }
 
-  // If we're inside a string (unterminated), close it first
-  if (inString) s += '"';
+  // If string was cut off mid-way, close it
+  if (inStr) {
+    s += '"';
+  }
 
-  // Remove trailing comma again after potential string close
+  // Remove trailing comma again
   s = s.replace(/,\s*$/, '');
 
-  // Close unclosed brackets and braces
-  for (let i = 0; i < brackets; i++) s += ']';
-  for (let i = 0; i < braces; i++) s += '}';
+  // Close open structures in LIFO order (last in, first out)
+  while (openStack.length > 0) {
+    const lastOpen = openStack.pop();
+    if (lastOpen === '{') {
+      s += '}';
+    } else if (lastOpen === '[') {
+      s += ']';
+    }
+  }
 
   return s;
 }
 
+/**
+ * Robust JSON extractor from AI output that handles:
+ * - Markdown fences ```json ... ```
+ * - Unescaped LaTeX backslashes (\log, \sqrt, \frac, \le, \ge, etc.)
+ * - Unescaped quotes inside strings ("x = 2")
+ * - Raw newlines inside strings
+ * - Trailing commas
+ * - Truncated JSON responses
+ */
 export function extractJsonFromText(rawText: string): any {
-  if (!rawText) {
+  if (!rawText || !rawText.trim()) {
     throw new Error('AI trả về phản hồi rỗng.');
   }
 
-  // 1. Remove markdown code blocks if wrapped in ```json ... ``` or ``` ... ```
-  let cleaned = rawText
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/\s*```$/i, '')
-    .trim();
+  // 1. Extract content between ```json ... ``` or ``` ... ``` if present
+  const fenceMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  let cleaned = fenceMatch ? fenceMatch[1].trim() : rawText.trim();
 
-  // Try direct parse
+  // Try direct parse first
   try {
     return JSON.parse(cleaned);
-  } catch {
-    // 2. Try regex extraction of first outer balanced JSON object { ... }
-    const firstBrace = cleaned.indexOf('{');
-    const lastBrace = cleaned.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      const jsonCandidate = cleaned.substring(firstBrace, lastBrace + 1);
-      try {
-        return JSON.parse(jsonCandidate);
-      } catch {
-        // 3. JSON bị truncate — thử repair
-        const truncated = cleaned.substring(firstBrace);
-        try {
-          const repaired = repairTruncatedJson(truncated);
-          return JSON.parse(repaired);
-        } catch (err: any) {
-          throw new Error(
-            `Không thể bóc tách JSON hợp lệ từ phản hồi AI: ${err.message || err}. Dữ liệu thô: ${cleaned.substring(0, 200)}...`
-          );
+  } catch {}
+
+  // 2. Locate the first { and last }
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+  let candidate = '';
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    candidate = cleaned.substring(firstBrace, lastBrace + 1);
+  } else if (firstBrace !== -1) {
+    candidate = cleaned.substring(firstBrace);
+  } else {
+    candidate = cleaned;
+  }
+
+  try {
+    return JSON.parse(candidate);
+  } catch {}
+
+  // 3. Fix smart quotes (Unicode curly quotes)
+  candidate = candidate.replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'");
+
+  // 4. Fix unescaped LaTeX backslashes (\log, \sqrt, \frac, \le, \ge, \left, \right, etc.)
+  // Valid JSON escape chars: ", \, /, b, f, n, r, t, uXXXX
+  candidate = candidate.replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, '\\\\');
+
+  // 5. Remove trailing commas before } or ]
+  candidate = candidate.replace(/,\s*([}\]])/g, '$1');
+
+  try {
+    return JSON.parse(candidate);
+  } catch {}
+
+  // 6. Fix unescaped control characters & raw newlines inside string literals, plus inner quotes
+  let fixedString = '';
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < candidate.length; i++) {
+    const ch = candidate[i];
+    if (escaped) {
+      fixedString += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      fixedString += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      if (!inString) {
+        inString = true;
+        fixedString += ch;
+      } else {
+        // Look ahead to check if this quote is legitimately closing the string
+        let nextChar = '';
+        for (let j = i + 1; j < candidate.length; j++) {
+          if (!/\s/.test(candidate[j])) {
+            nextChar = candidate[j];
+            break;
+          }
+        }
+        if (nextChar === ',' || nextChar === '}' || nextChar === ']' || nextChar === ':' || nextChar === '') {
+          inString = false;
+          fixedString += ch;
+        } else {
+          // Inner unescaped quote!
+          fixedString += '\\"';
         }
       }
+      continue;
     }
+    if (inString) {
+      if (ch === '\n') { fixedString += '\\n'; continue; }
+      if (ch === '\r') { continue; }
+      if (ch === '\t') { fixedString += '\\t'; continue; }
+    }
+    fixedString += ch;
+  }
+
+  try {
+    return JSON.parse(fixedString);
+  } catch {}
+
+  // 7. If still failing, attempt LIFO truncated JSON repair
+  try {
+    const repaired = repairTruncatedJson(fixedString);
+    return JSON.parse(repaired);
+  } catch (err: any) {
     throw new Error(
-      `AI không trả về cấu trúc JSON hợp lệ: ${cleaned.substring(0, 200)}...`
+      `Không thể bóc tách JSON hợp lệ từ phản hồi AI: ${err.message || err}. Dữ liệu thô: ${cleaned.substring(0, 300)}...`
     );
   }
 }
@@ -313,7 +439,7 @@ export async function transcribeImageWithClaude(
   }
 
   const endpointUrl = resolveClaudeEndpoint(settings.claudeBaseUrl);
-  let model = settings.claudeModel || process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
+  let model = settings.claudeModel || process.env.CLAUDE_MODEL || 'claude-opus-5';
   const legacyClaudeModels = [
     'claude-3-7-sonnet-20250219',
     'claude-3-5-sonnet-20241022',
@@ -321,7 +447,7 @@ export async function transcribeImageWithClaude(
     'claude-3-opus-20240229',
   ];
   if (legacyClaudeModels.includes(model)) {
-    model = 'claude-sonnet-4-6';
+    model = 'claude-opus-5';
   } else if (model === 'claude-haiku-4-5-20251001') {
     model = 'claude-haiku-4-5';
   } else if (model === 'claude-opus-4-6') {
@@ -332,18 +458,14 @@ export async function transcribeImageWithClaude(
   const contentBlocks: any[] = [];
 
   for (const imgUrl of images) {
-    const match = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
-    if (match) {
-      let mime = match[1].toLowerCase();
-      if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mime)) {
-        mime = 'image/jpeg';
-      }
+    const { mime, data } = normalizeBase64Image(imgUrl);
+    if (data) {
       contentBlocks.push({
         type: 'image',
         source: {
           type: 'base64',
           media_type: mime,
-          data: match[2],
+          data,
         },
       });
     }
@@ -354,6 +476,7 @@ export async function transcribeImageWithClaude(
     text: promptText,
   });
 
+  console.log(`[TRANSCRIBE_CLAUDE_FETCH] Calling ${endpointUrl} with model=${model}`);
   const response = await fetch(endpointUrl, {
     method: 'POST',
     headers: {
@@ -365,6 +488,7 @@ export async function transcribeImageWithClaude(
       model,
       max_tokens: 4096,
       stream: false,
+      strict_images: true,
       temperature: 0.0,
       messages: [
         {
@@ -1019,15 +1143,11 @@ export async function transcribeWithThreeModelsAndConsensus(
       try {
         const contentBlocks: any[] = [];
         for (const imgUrl of submission.images) {
-          const match = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
-          if (match) {
-            let mime = match[1].toLowerCase();
-            if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mime)) {
-              mime = 'image/jpeg';
-            }
+          const { mime, data } = normalizeBase64Image(imgUrl);
+          if (data) {
             contentBlocks.push({
               type: 'image',
-              source: { type: 'base64', media_type: mime, data: match[2] },
+              source: { type: 'base64', media_type: mime, data },
             });
           }
         }
@@ -1042,9 +1162,10 @@ export async function transcribeWithThreeModelsAndConsensus(
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: settings.claudeModel || process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
+            model: settings.claudeModel || process.env.CLAUDE_MODEL || 'claude-opus-5',
             max_tokens: 4096,
             stream: false,
+            strict_images: true,
             temperature: 0.0,
             messages: [{ role: 'user', content: contentBlocks }],
           }),
@@ -1212,7 +1333,7 @@ export async function gradeWithClaude(
   }
 
   const endpointUrl = resolveClaudeEndpoint(settings.claudeBaseUrl);
-  let model = settings.claudeModel || process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
+  let model = settings.claudeModel || process.env.CLAUDE_MODEL || 'claude-opus-5';
   // Fallback for legacy models that return 404 on current Anthropic account tier
   const legacyClaudeModels = [
     'claude-3-7-sonnet-20250219',
@@ -1221,8 +1342,7 @@ export async function gradeWithClaude(
     'claude-3-opus-20240229',
   ];
   if (legacyClaudeModels.includes(model)) {
-    console.warn(`Claude model "${model}" is not available on this API key. Auto-redirecting to claude-sonnet-4-6.`);
-    model = 'claude-sonnet-4-6';
+    model = 'claude-opus-5';
   } else if (model === 'claude-haiku-4-5-20251001') {
     model = 'claude-haiku-4-5';
   } else if (model === 'claude-opus-4-6') {
@@ -1242,19 +1362,14 @@ export async function gradeWithClaude(
   // Add handwriting scans / images
   if (submission.images && submission.images.length > 0) {
     for (const imgUrl of submission.images) {
-      const match = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
-      if (match) {
-        let mime = match[1].toLowerCase();
-        // Claude supports jpeg, png, gif, webp
-        if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mime)) {
-          mime = 'image/jpeg';
-        }
+      const { mime, data } = normalizeBase64Image(imgUrl);
+      if (data) {
         contentBlocks.push({
           type: 'image',
           source: {
             type: 'base64',
             media_type: mime,
-            data: match[2],
+            data,
           },
         });
       }
@@ -1271,6 +1386,7 @@ export async function gradeWithClaude(
     model,
     max_tokens: 8192,
     stream: false,
+    strict_images: true,
     temperature: 0.1,
     messages: [
       {
@@ -1285,6 +1401,7 @@ export async function gradeWithClaude(
     requestPayload.reasoning_effort = reasoningEffort;
   }
 
+  console.log(`[GRADE_CLAUDE_FETCH] Calling ${endpointUrl} with model=${model}`);
   const response = await fetch(endpointUrl, {
     method: 'POST',
     headers: {

@@ -56,15 +56,15 @@ const DEFAULT_SETTINGS: TeacherSettings = {
   teacherName: '',
   strictness: 'strict',
   provider: 'claude',
-  gradingMode: 'triple_consensus',
-  autoOcrBeforeGrading: true,
+  gradingMode: 'single',
+  autoOcrBeforeGrading: false,
   queueDelayMs: 2000,
   maxRegradeRetries: 2,
   consensusTolerance: 0.25,
   geminiApiKey: '',
   geminiModel: 'gemini-3.8-flash',
   claudeApiKey: '',
-  claudeModel: 'claude-sonnet-4-6',
+  claudeModel: 'claude-opus-5',
   claudeBaseUrl: 'https://apikey.pimath.id.vn/v1',
   openaiApiKey: '',
   openaiModel: 'gpt-4o',
@@ -107,19 +107,19 @@ export default function Home() {
         ];
         let claudeModel = parsed.claudeModel || DEFAULT_SETTINGS.claudeModel;
         if (legacyClaudeModels.includes(claudeModel) || claudeModel === 'claude-haiku-4-5-20251001') {
-          claudeModel = 'claude-sonnet-4-6';
+          claudeModel = 'claude-opus-5';
         }
 
         let claudeBaseUrl = parsed.claudeBaseUrl || DEFAULT_SETTINGS.claudeBaseUrl;
-        if (!claudeBaseUrl || claudeBaseUrl === 'https://api.anthropic.com/v1') {
+        if (!claudeBaseUrl || claudeBaseUrl === 'https://api.anthropic.com/v1' || claudeBaseUrl.includes('claudecode.pimath.id.vn')) {
           claudeBaseUrl = 'https://apikey.pimath.id.vn/v1';
         }
 
         setSettings({
           ...DEFAULT_SETTINGS,
           ...parsed,
-          gradingMode: parsed.gradingMode || 'triple_consensus',
-          autoOcrBeforeGrading: parsed.autoOcrBeforeGrading !== false,
+          gradingMode: parsed.gradingMode || 'single',
+          autoOcrBeforeGrading: parsed.autoOcrBeforeGrading ?? false,
           queueDelayMs: parsed.queueDelayMs ?? 2000,
           maxRegradeRetries: parsed.maxRegradeRetries ?? 2,
           consensusTolerance: parsed.consensusTolerance ?? 0.25,

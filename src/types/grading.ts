@@ -125,8 +125,8 @@ export interface TeacherSettings {
   teacherName: string;
   strictness: 'standard' | 'strict' | 'encouraging';
   provider: AIProvider;
-  gradingMode?: GradingMode; // 'triple_consensus' (mặc định) hoặc 'single'
-  autoOcrBeforeGrading?: boolean; // Tự động đọc và đối chiếu 3 model trước khi chấm (mặc định true)
+  gradingMode?: GradingMode; // 'single' (mặc định) hoặc 'triple_consensus'
+  autoOcrBeforeGrading?: boolean; // Tự động đọc và đối chiếu 3 model trước khi chấm (chỉ dùng khi ở chế độ triple_consensus)
   
   // Cấu hình Hàng đợi & Đối chiếu
   queueDelayMs?: number; // Độ trễ giữa các bài trong hàng đợi (ms), mặc định 2000
