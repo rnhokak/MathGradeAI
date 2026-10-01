@@ -65,7 +65,7 @@ const DEFAULT_SETTINGS: TeacherSettings = {
   geminiModel: 'gemini-3.8-flash',
   claudeApiKey: '',
   claudeModel: 'claude-sonnet-4-6',
-  claudeBaseUrl: 'https://claudecode.pimath.id.vn/v1',
+  claudeBaseUrl: 'https://apikey.pimath.id.vn/v1',
   openaiApiKey: '',
   openaiModel: 'gpt-4o',
   openaiBaseUrl: 'https://api.openai.com/v1',
@@ -112,7 +112,7 @@ export default function Home() {
 
         let claudeBaseUrl = parsed.claudeBaseUrl || DEFAULT_SETTINGS.claudeBaseUrl;
         if (!claudeBaseUrl || claudeBaseUrl === 'https://api.anthropic.com/v1') {
-          claudeBaseUrl = 'https://claudecode.pimath.id.vn/v1';
+          claudeBaseUrl = 'https://apikey.pimath.id.vn/v1';
         }
 
         setSettings({

@@ -72,7 +72,7 @@ export async function GET() {
       claude: {
         models: claudeModels,
         defaultModel: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
-        baseUrl: process.env.CLAUDE_BASE_URL || 'https://claudecode.pimath.id.vn/v1',
+        baseUrl: process.env.CLAUDE_BASE_URL || 'https://apikey.pimath.id.vn/v1',
         hasServerKey: Boolean(process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY),
       },
       gemini: {

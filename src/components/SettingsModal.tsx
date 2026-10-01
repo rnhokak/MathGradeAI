@@ -732,24 +732,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   current.openaiApiKey ||
                   current.openrouterApiKey ||
                   current.alibabacloudApiKey) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrent({
-                        ...current,
-                        geminiApiKey: '',
-                        claudeApiKey: '',
-                        openaiApiKey: '',
-                        openrouterApiKey: '',
-                        alibabacloudApiKey: '',
-                      });
-                    }}
-                    className="btn btn-secondary"
-                    style={{ padding: '4px 10px', fontSize: '0.74rem', flexShrink: 0 }}
-                  >
-                    Xóa key trình duyệt (Dùng .env.local)
-                  </button>
-                )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrent({
+                          ...current,
+                          geminiApiKey: '',
+                          claudeApiKey: '',
+                          openaiApiKey: '',
+                          openrouterApiKey: '',
+                          alibabacloudApiKey: '',
+                        });
+                      }}
+                      className="btn btn-secondary"
+                      style={{ padding: '4px 10px', fontSize: '0.74rem', flexShrink: 0 }}
+                    >
+                      Xóa key trình duyệt (Dùng .env.local)
+                    </button>
+                  )}
               </div>
 
               {/* 1. GEMINI CONFIG */}
@@ -906,7 +906,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </select>
 
                     <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '4px' }}>
-                      💡 Danh sách mô hình tuân theo tài liệu Anthropic Messages API (claudecode.pimath.id.vn). Bạn có thể cấu hình ẩn/hiện model qua biến <code>CLAUDE_VISIBLE_MODELS</code> hoặc <code>CLAUDE_HIDDEN_MODELS</code> trong <code>.env.local</code>.
+                      💡 Danh sách mô hình tuân theo tài liệu Anthropic Messages API (apikey.pimath.id.vn). Bạn có thể cấu hình ẩn/hiện model qua biến <code>CLAUDE_VISIBLE_MODELS</code> hoặc <code>CLAUDE_HIDDEN_MODELS</code> trong <code>.env.local</code>.
                     </p>
 
                     {isCustomClaude && (
@@ -999,14 +999,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       }}
                     >
                       <Globe size={13} />
-                      Claude Base URL (Tùy chọn - mặc định: https://claudecode.pimath.id.vn/v1):
+                      Claude Base URL (Tùy chọn - mặc định: https://apikey.pimath.id.vn/v1):
                     </label>
                     <input
                       type="text"
                       className="input-field font-mono"
                       value={current.claudeBaseUrl || ''}
                       onChange={(e) => setCurrent({ ...current, claudeBaseUrl: e.target.value })}
-                      placeholder="https://claudecode.pimath.id.vn/v1"
+                      placeholder="https://apikey.pimath.id.vn/v1"
                     />
                   </div>
                 </>

@@ -32,7 +32,7 @@ Hãy trả về duy nhất JSON có dạng:
   ]
 }`;
 
-  const res = await fetch('https://claudecode.pimath.id.vn/v1/messages', {
+  const res = await fetch('https://apikey.pimath.id.vn/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

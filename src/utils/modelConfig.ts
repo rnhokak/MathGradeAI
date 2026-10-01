@@ -10,7 +10,7 @@ export interface ModelOption {
 }
 
 /**
- * Các mô hình Claude được hỗ trợ theo tài liệu Anthropic Messages API (Host: claudecode.pimath.id.vn)
+ * Các mô hình Claude được hỗ trợ theo tài liệu Anthropic Messages API (Host: apikey.pimath.id.vn)
  * Chỉ dùng các model Claude này (không phân biệt hoa thường). Model khác sẽ trả về 400 invalid_request_error.
  */
 export const SUPPORTED_CLAUDE_MODELS: ModelOption[] = [

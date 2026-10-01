@@ -1,6 +1,6 @@
 async function test() {
   const smallPng = 'iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mNk+M9QzwAEjDAGNYxUAAAn7wEvv7tHrwAAAABJRU5ErkJggg==';
-  
+
   const variations = [
     {
       name: 'without anthropic-version',
@@ -37,7 +37,7 @@ async function test() {
 
   for (const v of variations) {
     try {
-      const res = await fetch('https://claudecode.pimath.id.vn/v1/messages', {
+      const res = await fetch('https://apikey.pimath.id.vn/v1/messages', {
         method: 'POST',
         headers: v.headers,
         body: JSON.stringify(v.body)

@@ -55,13 +55,13 @@ export function createAlibabaCloudClient(apiKey: string, baseUrl?: string): Open
 }
 
 /**
- * Chuẩn hóa URL endpoint cho Claude API (tương thích Anthropic Messages API và proxy claudecode.pimath.id.vn)
+ * Chuẩn hóa URL endpoint cho Claude API (tương thích Anthropic Messages API và proxy apikey.pimath.id.vn)
  */
 export function resolveClaudeEndpoint(rawBaseUrl?: string): string {
   let url = (
     rawBaseUrl ||
     process.env.CLAUDE_BASE_URL ||
-    'https://claudecode.pimath.id.vn/v1'
+    'https://apikey.pimath.id.vn/v1'
   )
     .trim()
     .replace(/\/+$/, '');
@@ -75,8 +75,8 @@ export function resolveClaudeEndpoint(rawBaseUrl?: string): string {
     return url;
   }
 
-  // Host claudecode.pimath.id.vn
-  if (url.includes('claudecode.pimath.id.vn')) {
+  // Host apikey.pimath.id.vn
+  if (url.includes('apikey.pimath.id.vn')) {
     if (url.endsWith('/anthropic/v1') || url.endsWith('/anthropic')) {
       return `${url.replace(/\/anthropic(\/v1)?$/, '')}/v1/messages`;
     }
@@ -208,13 +208,13 @@ export function buildGradingResult(
     generalComment: parsedJson.generalComment || '',
     criteriaBreakdown: Array.isArray(parsedJson.criteriaBreakdown)
       ? parsedJson.criteriaBreakdown.map((c: any, idx: number) => ({
-          criterionId: c.criterionId || `crit-${idx + 1}`,
-          criterionName: c.criterionName || `Tiêu chí ${idx + 1}`,
-          maxPoints: Number(c.maxPoints ?? 0),
-          awardedPoints: Number(c.awardedPoints ?? 0),
-          isCorrect: c.isCorrect || (Number(c.awardedPoints) >= Number(c.maxPoints) ? 'full' : Number(c.awardedPoints) > 0 ? 'partial' : 'wrong'),
-          reason: c.reason || '',
-        }))
+        criterionId: c.criterionId || `crit-${idx + 1}`,
+        criterionName: c.criterionName || `Tiêu chí ${idx + 1}`,
+        maxPoints: Number(c.maxPoints ?? 0),
+        awardedPoints: Number(c.awardedPoints ?? 0),
+        isCorrect: c.isCorrect || (Number(c.awardedPoints) >= Number(c.maxPoints) ? 'full' : Number(c.awardedPoints) > 0 ? 'partial' : 'wrong'),
+        reason: c.reason || '',
+      }))
       : [],
     correctionGuide: parsedJson.correctionGuide || '',
     teacherComment: parsedJson.teacherComment || '',
@@ -380,7 +380,7 @@ export async function transcribeImageWithClaude(
     try {
       const errJson = await response.json();
       errorDetail = errJson.error?.message || errJson.message || JSON.stringify(errJson);
-    } catch {}
+    } catch { }
     if (
       (response.status === 401 || /invalid x-api-key/i.test(errorDetail)) &&
       backupApiKey &&
@@ -471,7 +471,7 @@ export async function transcribeImageWithOpenAI(
     try {
       const errJson = await response.json();
       errorDetail = errJson.error?.message || errJson.message || JSON.stringify(errJson);
-    } catch {}
+    } catch { }
     if (
       (response.status === 401 || /invalid api key/i.test(errorDetail)) &&
       backupApiKey &&
@@ -2256,8 +2256,8 @@ export async function gradeWithThreeModelsAndConsensus(
       consensusPoint >= c.points
         ? 'full'
         : consensusPoint > 0
-        ? 'partial'
-        : 'wrong';
+          ? 'partial'
+          : 'wrong';
 
     for (const ev of finalEvaluations) {
       if (Math.abs((ev.awardedPointsByCriterion[c.id] ?? 0) - consensusPoint) <= 0.05) {
