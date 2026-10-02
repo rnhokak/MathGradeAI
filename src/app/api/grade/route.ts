@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { RubricData, StudentSubmission, TeacherSettings } from '@/types/grading';
-import { gradeWithProvider, gradeWithThreeModelsAndConsensus, resolveClaudeEndpoint } from '@/utils/aiGrading';
+import {
+  gradeWithProvider,
+  gradeWithThreeModelsAndConsensus,
+  gradeWithClaudeTriplePass,
+  resolveClaudeEndpoint,
+} from '@/utils/aiGrading';
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,7 +33,7 @@ export async function POST(req: NextRequest) {
       claudeBaseUrl: resolveClaudeEndpoint(settings?.claudeBaseUrl),
     };
 
-    const gradingMode = effectiveSettings?.gradingMode || 'single';
+    const gradingMode = effectiveSettings?.gradingMode || 'claude_triple_pass';
 
     // Retrieve API keys from server env
     const envGemini = (process.env.GEMINI_API_KEY || '').trim();
@@ -98,7 +103,37 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Mode 2: Single model provider
+    // Mode 2: Claude Triple-Pass (Chấm 3 lần bằng Claude & tổng hợp kết quả chính xác nhất)
+    if (gradingMode === 'claude_triple_pass') {
+      if (!claudeKey) {
+        return NextResponse.json(
+          {
+            error:
+              'Chưa cấu hình Anthropic Claude API Key. Vui lòng bấm vào Cài Đặt (chọn tab Claude) để nhập API Key, hoặc khai báo ANTHROPIC_API_KEY trong file .env.local.',
+          },
+          { status: 400 }
+        );
+      }
+
+      const { gradingResult, consensusReport } = await gradeWithClaudeTriplePass(
+        submission,
+        rubric,
+        effectiveSettings,
+        claudeKey,
+        backupKeys.claude
+      );
+
+      return NextResponse.json({
+        success: true,
+        gradingResult,
+        consensusReport,
+        ocrComparison: gradingResult.ocrComparison || submission.ocrComparison,
+        extractedText: submission.extractedText,
+        mode: 'claude_triple_pass',
+      });
+    }
+
+    // Mode 3: Single model provider
     const provider = effectiveSettings?.provider || 'claude';
     let apiKey = '';
     let backupApiKey: string | undefined = undefined;

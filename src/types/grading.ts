@@ -118,15 +118,16 @@ export interface StudentSubmission {
 }
 
 export type AIProvider = 'gemini' | 'claude' | 'openai' | 'openrouter' | 'alibabacloud';
-export type GradingMode = 'single' | 'triple_consensus';
+export type GradingMode = 'single' | 'triple_consensus' | 'claude_triple_pass';
 
 export interface TeacherSettings {
   role: 'thầy' | 'cô';
   teacherName: string;
   strictness: 'standard' | 'strict' | 'encouraging';
   provider: AIProvider;
-  gradingMode?: GradingMode; // 'single' (mặc định) hoặc 'triple_consensus'
-  autoOcrBeforeGrading?: boolean; // Tự động đọc và đối chiếu 3 model trước khi chấm (chỉ dùng khi ở chế độ triple_consensus)
+  gradingMode?: GradingMode; // 'claude_triple_pass' (mặc định - Claude 3 lần tối ưu), 'triple_consensus' (đa model) hoặc 'single' (1 model)
+  _gradingModeExplicitlySet?: boolean;
+  autoOcrBeforeGrading?: boolean; // Tự động đọc và đối chiếu 3 model trước khi chấm (dùng khi ở chế độ đối chiếu)
   
   // Cấu hình Hàng đợi & Đối chiếu
   queueDelayMs?: number; // Độ trễ giữa các bài trong hàng đợi (ms), mặc định 2000

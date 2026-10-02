@@ -61,7 +61,36 @@ export const Header: React.FC<HeaderProps> = ({
               <h1 style={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
                 MathGrade <span className="text-gradient">AI</span>
               </h1>
-              {settings.provider === 'alibabacloud' ? (
+              {(settings.gradingMode || 'claude_triple_pass') === 'claude_triple_pass' ? (
+                <span
+                  className="badge badge-amber"
+                  style={{
+                    cursor: 'pointer',
+                    background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.25))',
+                    border: '1px solid #f59e0b',
+                    color: '#fef3c7',
+                    fontWeight: 600,
+                  }}
+                  onClick={onOpenSettings}
+                  title="Chế độ mặc định: Chấm 3 lần bằng Claude (Chuẩn barem + Soi lỗi + Sư phạm) & Tổng hợp tối ưu"
+                >
+                  <Bot size={11} /> Claude 3 Lần (Tối Ưu ⭐)
+                </span>
+              ) : settings.gradingMode === 'triple_consensus' ? (
+                <span
+                  className="badge badge-indigo"
+                  style={{
+                    cursor: 'pointer',
+                    background: 'rgba(99, 102, 241, 0.25)',
+                    border: '1px solid #6366f1',
+                    color: '#e0e7ff',
+                  }}
+                  onClick={onOpenSettings}
+                  title="Chế độ chấm đa model đối chiếu"
+                >
+                  <Layers size={11} /> Đa Model Đối Chiếu (3 AI)
+                </span>
+              ) : settings.provider === 'alibabacloud' ? (
                 <span
                   className="badge"
                   style={{

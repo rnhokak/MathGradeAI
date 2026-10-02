@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
+import { jsonrepair } from 'jsonrepair';
 import {
   GradingResult,
   RubricData,
@@ -16,6 +17,8 @@ import {
   buildGradingPrompt,
   buildMathOcrPrompt,
   buildOcrConsensusPrompt,
+  buildClaudeTriplePassPrompt,
+  buildClaudeSynthesisPrompt,
 } from './promptBuilder';
 
 /**
@@ -124,9 +127,6 @@ export function resolveClaudeEndpoint(rawBaseUrl?: string): string {
 
 
 /**
- * Robust JSON extractor from AI output that may contain markdown or surrounding text
- */
-/**
  * Attempts to repair a truncated JSON string by closing unclosed braces/brackets
  * using a LIFO stack in reverse order of opening.
  */
@@ -194,29 +194,204 @@ function repairTruncatedJson(raw: string): string {
 }
 
 /**
+ * Pre-cleans AI JSON string by stripping comments, smart quotes, unescaped LaTeX backslashes,
+ * unescaped inner quotation marks inside strings, and raw newlines.
+ */
+function sanitizeAiJson(raw: string): string {
+  // 1. Remove markdown fences ```json ... ```
+  let text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
+  // 2. Remove JavaScript comments // ... and /* ... */ that AI models sometimes include
+  // Be careful not to remove http:// or https://
+  text = text.replace(/(\/\*[\s\S]*?\*\/)|((?<!https?:)\/\/[^\r\n]*)/g, '');
+
+  // 3. Normalize unicode smart quotes
+  text = text.replace(/[\u201C\u201D\u00AB\u00BB]/g, '"').replace(/[\u2018\u2019]/g, "'");
+
+  // 4. Protect LaTeX backslashes for common math symbols
+  const commonLatexCommands = [
+    'frac', 'dfrac', 'tfrac', 'cfrac',
+    'sqrt',
+    'log', 'ln', 'lg', 'exp',
+    'sin', 'cos', 'tan', 'cot', 'arcsin', 'arccos', 'arctan',
+    'lim', 'to', 'infty',
+    'left', 'right',
+    'text', 'textbf', 'textit', 'textrm', 'operatorname',
+    'alpha', 'beta', 'gamma', 'delta', 'Delta', 'epsilon', 'varepsilon',
+    'zeta', 'eta', 'theta', 'vartheta', 'iota', 'kappa', 'lambda', 'Lambda',
+    'mu', 'nu', 'xi', 'pi', 'rho', 'sigma', 'tau', 'phi', 'chi', 'psi', 'omega', 'Omega',
+    'times', 'cdot', 'pm', 'mp', 'div', 'ne', 'neq', 'le', 'leq', 'ge', 'geq',
+    'approx', 'sim', 'equiv', 'in', 'notin', 'subset', 'subseteq',
+    'cap', 'cup', 'setminus', 'emptyset',
+    'forall', 'exists', 'nexists',
+    'Rightarrow', 'Leftarrow', 'Leftrightarrow', 'implies', 'iff',
+    'vec', 'overrightarrow', 'bar', 'hat', 'overline', 'underline',
+    'sum', 'prod', 'int', 'iint', 'iiint', 'oint',
+    'partial', 'nabla', 'mathbb', 'mathbf', 'mathcal'
+  ];
+  const latexRegex = new RegExp(`\\\\(${commonLatexCommands.join('|')})(?![a-zA-Z])`, 'g');
+  text = text.replace(latexRegex, '\\\\$1');
+
+  // Also replace any backslash not followed by valid JSON escape character
+  text = text.replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, '\\\\');
+
+  // 5. Fix inner unescaped quotes and control characters inside string literals
+  let result = '';
+  let inString = false;
+  let isEscaped = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+
+    if (isEscaped) {
+      result += char;
+      isEscaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      result += char;
+      isEscaped = true;
+      continue;
+    }
+
+    if (char === '"') {
+      if (!inString) {
+        inString = true;
+        result += char;
+      } else {
+        const rest = text.slice(i + 1).trimStart();
+        const isClosingQuote =
+          rest.startsWith(':') ||
+          rest.startsWith(',') ||
+          rest.startsWith('}') ||
+          rest.startsWith(']') ||
+          rest === '';
+
+        if (isClosingQuote) {
+          if (rest.startsWith(',')) {
+            const afterComma = rest.slice(1).trimStart();
+            const isProperJsonToken = /^("|\{|\}|\[|\]|-?\d|true|false|null)/i.test(afterComma);
+            if (!isProperJsonToken && afterComma.length > 0) {
+              result += '\\"';
+              continue;
+            }
+          }
+          inString = false;
+          result += char;
+        } else {
+          result += '\\"';
+        }
+      }
+      continue;
+    }
+
+    if (inString) {
+      if (char === '\n') {
+        result += '\\n';
+        continue;
+      }
+      if (char === '\r') {
+        continue;
+      }
+      if (char === '\t') {
+        result += '\\t';
+        continue;
+      }
+    }
+
+    result += char;
+  }
+
+  return result;
+}
+
+/**
+ * Ultimate fallback regex parser: Extracts grading fields from malformed AI output
+ * so that grading never crashes with 500 errors even if JSON is severely damaged.
+ */
+function fallbackRegexJsonExtractor(rawText: string): any {
+  const result: any = {
+    score: 0,
+    maxScore: 10,
+    generalComment: '',
+    criteriaBreakdown: [],
+    strengths: [],
+    weaknesses: [],
+    correctionGuide: '',
+    teacherComment: '',
+  };
+
+  const scoreMatch = rawText.match(/"score"\s*:\s*([0-9.]+)/i);
+  if (scoreMatch) result.score = parseFloat(scoreMatch[1]);
+
+  const maxScoreMatch = rawText.match(/"maxScore"\s*:\s*([0-9.]+)/i);
+  if (maxScoreMatch) result.maxScore = parseFloat(maxScoreMatch[1]);
+
+  const generalCommentMatch = rawText.match(/"generalComment"\s*:\s*"([\s\S]*?)(?="\s*,\s*"\w+":|"\s*})/i);
+  if (generalCommentMatch) result.generalComment = generalCommentMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+
+  const teacherCommentMatch = rawText.match(/"teacherComment"\s*:\s*"([\s\S]*?)(?="\s*,\s*"\w+":|"\s*})/i);
+  if (teacherCommentMatch) result.teacherComment = teacherCommentMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+
+  const correctionGuideMatch = rawText.match(/"correctionGuide"\s*:\s*"([\s\S]*?)(?="\s*,\s*"\w+":|"\s*})/i);
+  if (correctionGuideMatch) result.correctionGuide = correctionGuideMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+
+  const synthesisSummaryMatch = rawText.match(/"synthesisSummary"\s*:\s*"([\s\S]*?)(?="\s*,\s*"\w+":|"\s*})/i);
+  if (synthesisSummaryMatch) result.synthesisSummary = synthesisSummaryMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+
+  // Try extracting criteria items: { "criterionId": "...", "awardedPoints": ... }
+  const criteriaRegex = /\{\s*"criterionId"\s*:\s*"([^"]+)"[\s\S]*?"awardedPoints"\s*:\s*([0-9.]+)[\s\S]*?\}/gi;
+  let match;
+  while ((match = criteriaRegex.exec(rawText)) !== null) {
+    const itemBlock = match[0];
+    const critId = match[1];
+    const pts = parseFloat(match[2]);
+    const nameMatch = itemBlock.match(/"criterionName"\s*:\s*"([^"]+)"/i);
+    const maxMatch = itemBlock.match(/"maxPoints"\s*:\s*([0-9.]+)/i);
+    const isCorrectMatch = itemBlock.match(/"isCorrect"\s*:\s*"([^"]+)"/i);
+    const reasonMatch = itemBlock.match(/"reason"\s*:\s*"([\s\S]*?)(?="\s*,\s*"\w+":|"\s*})/i);
+
+    result.criteriaBreakdown.push({
+      criterionId: critId,
+      criterionName: nameMatch ? nameMatch[1] : critId,
+      maxPoints: maxMatch ? parseFloat(maxMatch[1]) : pts,
+      awardedPoints: pts,
+      isCorrect: isCorrectMatch ? isCorrectMatch[1] : (pts > 0 ? 'full' : 'wrong'),
+      reason: reasonMatch ? reasonMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : '',
+    });
+  }
+
+  return result;
+}
+
+/**
  * Robust JSON extractor from AI output that handles:
  * - Markdown fences ```json ... ```
  * - Unescaped LaTeX backslashes (\log, \sqrt, \frac, \le, \ge, etc.)
  * - Unescaped quotes inside strings ("x = 2")
  * - Raw newlines inside strings
- * - Trailing commas
- * - Truncated JSON responses
+ * - Trailing commas and JavaScript comments
+ * - jsonrepair library auto-fixing
+ * - Fallback regex extraction so no 500 error occurs
  */
 export function extractJsonFromText(rawText: string): any {
   if (!rawText || !rawText.trim()) {
     throw new Error('AI trả về phản hồi rỗng.');
   }
 
-  // 1. Extract content between ```json ... ``` or ``` ... ``` if present
+  // 1. Try direct parse first
+  try {
+    return JSON.parse(rawText.trim());
+  } catch {}
+
+  // 2. Extract content between ```json ... ``` or locate first { and last }
   const fenceMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   let cleaned = fenceMatch ? fenceMatch[1].trim() : rawText.trim();
-
-  // Try direct parse first
   try {
     return JSON.parse(cleaned);
   } catch {}
 
-  // 2. Locate the first { and last }
   const firstBrace = cleaned.indexOf('{');
   const lastBrace = cleaned.lastIndexOf('}');
   let candidate = '';
@@ -228,85 +403,44 @@ export function extractJsonFromText(rawText: string): any {
     candidate = cleaned;
   }
 
+  // 3. Try jsonrepair directly on candidate
   try {
-    return JSON.parse(candidate);
+    const directRepaired = jsonrepair(candidate);
+    return JSON.parse(directRepaired);
   } catch {}
 
-  // 3. Fix smart quotes (Unicode curly quotes)
-  candidate = candidate.replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'");
+  // 4. Sanitize AI output (comments, LaTeX backslashes, smart quotes, inner quotes, raw newlines)
+  const sanitized = sanitizeAiJson(candidate);
 
-  // 4. Fix unescaped LaTeX backslashes (\log, \sqrt, \frac, \le, \ge, \left, \right, etc.)
-  // Valid JSON escape chars: ", \, /, b, f, n, r, t, uXXXX
-  candidate = candidate.replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, '\\\\');
-
-  // 5. Remove trailing commas before } or ]
-  candidate = candidate.replace(/,\s*([}\]])/g, '$1');
-
+  // 5. Try jsonrepair on sanitized candidate
   try {
-    return JSON.parse(candidate);
-  } catch {}
-
-  // 6. Fix unescaped control characters & raw newlines inside string literals, plus inner quotes
-  let fixedString = '';
-  let inString = false;
-  let escaped = false;
-
-  for (let i = 0; i < candidate.length; i++) {
-    const ch = candidate[i];
-    if (escaped) {
-      fixedString += ch;
-      escaped = false;
-      continue;
-    }
-    if (ch === '\\') {
-      fixedString += ch;
-      escaped = true;
-      continue;
-    }
-    if (ch === '"') {
-      if (!inString) {
-        inString = true;
-        fixedString += ch;
-      } else {
-        // Look ahead to check if this quote is legitimately closing the string
-        let nextChar = '';
-        for (let j = i + 1; j < candidate.length; j++) {
-          if (!/\s/.test(candidate[j])) {
-            nextChar = candidate[j];
-            break;
-          }
-        }
-        if (nextChar === ',' || nextChar === '}' || nextChar === ']' || nextChar === ':' || nextChar === '') {
-          inString = false;
-          fixedString += ch;
-        } else {
-          // Inner unescaped quote!
-          fixedString += '\\"';
-        }
-      }
-      continue;
-    }
-    if (inString) {
-      if (ch === '\n') { fixedString += '\\n'; continue; }
-      if (ch === '\r') { continue; }
-      if (ch === '\t') { fixedString += '\\t'; continue; }
-    }
-    fixedString += ch;
-  }
-
-  try {
-    return JSON.parse(fixedString);
-  } catch {}
-
-  // 7. If still failing, attempt LIFO truncated JSON repair
-  try {
-    const repaired = repairTruncatedJson(fixedString);
+    const repaired = jsonrepair(sanitized);
     return JSON.parse(repaired);
-  } catch (err: any) {
-    throw new Error(
-      `Không thể bóc tách JSON hợp lệ từ phản hồi AI: ${err.message || err}. Dữ liệu thô: ${cleaned.substring(0, 300)}...`
-    );
-  }
+  } catch {}
+
+  // 6. Try parsing sanitized directly
+  try {
+    return JSON.parse(sanitized);
+  } catch {}
+
+  // 7. Stack-based repairTruncatedJson fallback
+  try {
+    const truncatedRepaired = repairTruncatedJson(sanitized);
+    return JSON.parse(jsonrepair(truncatedRepaired));
+  } catch {}
+
+  // 8. Ultimate fallback: Regex field extractor to prevent 500 crashes
+  try {
+    const fallbackObj = fallbackRegexJsonExtractor(rawText);
+    if (fallbackObj && (fallbackObj.score !== undefined || fallbackObj.criteriaBreakdown?.length > 0)) {
+      console.warn('[JSON Extractor] JSON bị lỗi cú pháp từ AI, đã dùng bộ bóc tách regex cứu vãn thành công:', fallbackObj);
+      return fallbackObj;
+    }
+  } catch {}
+
+  throw new Error(
+    `Không thể bóc tách JSON hợp lệ từ phản hồi AI. Dữ liệu thô: ${cleaned.substring(0, 300)}...`
+  );
 }
 
 /**
@@ -476,43 +610,70 @@ export async function transcribeImageWithClaude(
     text: promptText,
   });
 
-  console.log(`[TRANSCRIBE_CLAUDE_FETCH] Calling ${endpointUrl} with model=${model}`);
-  const response = await fetch(endpointUrl, {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 4096,
-      stream: false,
-      strict_images: true,
-      temperature: 0.0,
-      messages: [
-        {
-          role: 'user',
-          content: contentBlocks,
-        },
-      ],
-    }),
-  });
+  let response: Response | null = null;
+  let lastError: any = null;
+  const MAX_FETCH_RETRIES = 3;
 
-  if (!response.ok) {
-    let errorDetail = response.statusText;
+  for (let attempt = 1; attempt <= MAX_FETCH_RETRIES; attempt++) {
     try {
-      const errJson = await response.json();
-      errorDetail = errJson.error?.message || errJson.message || JSON.stringify(errJson);
-    } catch { }
-    if (
-      (response.status === 401 || /invalid x-api-key/i.test(errorDetail)) &&
-      backupApiKey &&
-      backupApiKey !== apiKey
-    ) {
-      return transcribeImageWithClaude(images, studentName, settings, backupApiKey);
+      console.log(`[TRANSCRIBE_CLAUDE_FETCH] (Lần ${attempt}/${MAX_FETCH_RETRIES}) Calling ${endpointUrl} with model=${model}`);
+      const res = await fetch(endpointUrl, {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 4096,
+          stream: false,
+          strict_images: true,
+          temperature: 0.0,
+          messages: [
+            {
+              role: 'user',
+              content: contentBlocks,
+            },
+          ],
+        }),
+      });
+
+      if (!res.ok) {
+        let errorDetail = res.statusText;
+        try {
+          const errJson = await res.json();
+          errorDetail = errJson.error?.message || errJson.message || JSON.stringify(errJson);
+        } catch { }
+        if (
+          (res.status === 401 || /invalid x-api-key/i.test(errorDetail)) &&
+          backupApiKey &&
+          backupApiKey !== apiKey
+        ) {
+          return transcribeImageWithClaude(images, studentName, settings, backupApiKey);
+        }
+        if (res.status === 401 || /invalid x-api-key/i.test(errorDetail)) {
+          throw new Error(`Anthropic Claude OCR: API Key không hợp lệ (401 Unauthorized).`);
+        }
+        throw new Error(`Claude OCR lỗi (${res.status}): ${errorDetail}`);
+      }
+
+      response = res;
+      break;
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[TRANSCRIBE_CLAUDE_FETCH] Lần ${attempt}/${MAX_FETCH_RETRIES} gặp lỗi:`, err.message || err);
+      if (/401|invalid x-api-key/i.test(err.message || '')) {
+        throw err;
+      }
+      if (attempt < MAX_FETCH_RETRIES) {
+        await new Promise((r) => setTimeout(r, attempt * 1200));
+      }
     }
-    throw new Error(`Claude OCR lỗi (${response.status}): ${errorDetail}`);
+  }
+
+  if (!response || !response.ok) {
+    throw lastError || new Error(`Claude OCR thất bại sau ${MAX_FETCH_RETRIES} lần thử.`);
   }
 
   const data = await response.json();
@@ -1317,15 +1478,17 @@ export async function gradeWithGemini(
 }
 
 /**
- * Grade using Anthropic Claude API (Claude 3.7 Sonnet, Claude 3.5 Sonnet, etc.)
+ * Core function to grade with Claude API using a customized prompt and temperature
  */
-export async function gradeWithClaude(
+export async function gradeWithClaudeCustomPrompt(
+  promptText: string,
   submission: StudentSubmission,
   rubric: RubricData,
   settings: TeacherSettings,
   apiKey: string,
-  backupApiKey?: string
-): Promise<{ gradingResult: GradingResult; modelUsed: string; reasoning?: string }> {
+  backupApiKey?: string,
+  temperature: number = 0.1
+): Promise<{ gradingResult: GradingResult; modelUsed: string; reasoning?: string; rawOutput: string }> {
   if (!apiKey) {
     throw new Error(
       'Chưa cấu hình Anthropic Claude API Key. Vui lòng vào Cài Đặt (chọn mục Claude) để nhập API Key, hoặc khai báo ANTHROPIC_API_KEY trong file .env.local.'
@@ -1334,7 +1497,6 @@ export async function gradeWithClaude(
 
   const endpointUrl = resolveClaudeEndpoint(settings.claudeBaseUrl);
   let model = settings.claudeModel || process.env.CLAUDE_MODEL || 'claude-opus-5';
-  // Fallback for legacy models that return 404 on current Anthropic account tier
   const legacyClaudeModels = [
     'claude-3-7-sonnet-20250219',
     'claude-3-5-sonnet-20241022',
@@ -1349,14 +1511,6 @@ export async function gradeWithClaude(
     model = 'claude-opus-4-7';
   }
 
-  const promptText = buildGradingPrompt(
-    rubric,
-    submission.studentName,
-    settings,
-    submission.extractedText
-  );
-
-  // Build Claude message content blocks
   const contentBlocks: any[] = [];
 
   // Add handwriting scans / images
@@ -1376,7 +1530,6 @@ export async function gradeWithClaude(
     }
   }
 
-  // Add the pedagogical prompt
   contentBlocks.push({
     type: 'text',
     text: promptText,
@@ -1387,7 +1540,7 @@ export async function gradeWithClaude(
     max_tokens: 8192,
     stream: false,
     strict_images: true,
-    temperature: 0.1,
+    temperature,
     messages: [
       {
         role: 'user',
@@ -1401,33 +1554,57 @@ export async function gradeWithClaude(
     requestPayload.reasoning_effort = reasoningEffort;
   }
 
-  console.log(`[GRADE_CLAUDE_FETCH] Calling ${endpointUrl} with model=${model}`);
-  const response = await fetch(endpointUrl, {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requestPayload),
-  });
+  let response: Response | null = null;
+  let lastError: any = null;
+  const MAX_FETCH_RETRIES = 3;
 
-  if (!response.ok) {
-    let errorDetail = response.statusText;
+  for (let attempt = 1; attempt <= MAX_FETCH_RETRIES; attempt++) {
     try {
-      const errJson = await response.json();
-      errorDetail = errJson.error?.message || errJson.message || JSON.stringify(errJson);
-    } catch {
-      // ignore
+      console.log(`[GRADE_CLAUDE_FETCH] (Lần ${attempt}/${MAX_FETCH_RETRIES}) Calling ${endpointUrl} with model=${model} (temp=${temperature})`);
+      const res = await fetch(endpointUrl, {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestPayload),
+      });
+
+      if (!res.ok) {
+        let errorDetail = res.statusText;
+        try {
+          const errJson = await res.json();
+          errorDetail = errJson.error?.message || errJson.message || JSON.stringify(errJson);
+        } catch {
+          // ignore
+        }
+        if ((res.status === 401 || /invalid x-api-key/i.test(errorDetail)) && backupApiKey && backupApiKey !== apiKey) {
+          console.warn('[Claude] Key trình duyệt không hợp lệ (401). Đang tự động chuyển sang server backup key từ .env.local...');
+          return gradeWithClaudeCustomPrompt(promptText, submission, rubric, settings, backupApiKey, undefined, temperature);
+        }
+        if (res.status === 401 || /invalid x-api-key/i.test(errorDetail)) {
+          throw new Error('Anthropic Claude: API Key không hợp lệ hoặc đã hết hạn (401 Unauthorized).');
+        }
+        throw new Error(`Lỗi từ Claude API (${res.status}): ${errorDetail}`);
+      }
+
+      response = res;
+      break;
+    } catch (fetchErr: any) {
+      lastError = fetchErr;
+      console.warn(`[GRADE_CLAUDE_FETCH] Lần ${attempt}/${MAX_FETCH_RETRIES} gặp lỗi:`, fetchErr.message || fetchErr);
+      if (/401|invalid x-api-key/i.test(fetchErr.message || '')) {
+        throw fetchErr;
+      }
+      if (attempt < MAX_FETCH_RETRIES) {
+        await new Promise((r) => setTimeout(r, attempt * 1200));
+      }
     }
-    if ((response.status === 401 || /invalid x-api-key/i.test(errorDetail)) && backupApiKey && backupApiKey !== apiKey) {
-      console.warn('[Claude] Key trình duyệt không hợp lệ (401). Đang tự động chuyển sang server backup key từ .env.local...');
-      return gradeWithClaude(submission, rubric, settings, backupApiKey);
-    }
-    if (response.status === 401 || /invalid x-api-key/i.test(errorDetail)) {
-      throw new Error('Anthropic Claude: API Key không hợp lệ hoặc đã hết hạn (401 Unauthorized).');
-    }
-    throw new Error(`Lỗi từ Claude API (${response.status}): ${errorDetail}`);
+  }
+
+  if (!response || !response.ok) {
+    throw lastError || new Error(`Gọi Claude API thất bại sau ${MAX_FETCH_RETRIES} lần thử.`);
   }
 
   const data = await response.json();
@@ -1454,8 +1631,326 @@ export async function gradeWithClaude(
     gradingResult.reasoningText = reasoningText;
   }
 
-  return { gradingResult, modelUsed: model, reasoning: reasoningText };
+  return { gradingResult, modelUsed: model, reasoning: reasoningText, rawOutput: textOutput };
 }
+
+/**
+ * Grade using Anthropic Claude API (Claude 3.7 Sonnet, Claude 3.5 Sonnet, etc.)
+ */
+export async function gradeWithClaude(
+  submission: StudentSubmission,
+  rubric: RubricData,
+  settings: TeacherSettings,
+  apiKey: string,
+  backupApiKey?: string
+): Promise<{ gradingResult: GradingResult; modelUsed: string; reasoning?: string }> {
+  const promptText = buildGradingPrompt(
+    rubric,
+    submission.studentName,
+    settings,
+    submission.extractedText
+  );
+  const res = await gradeWithClaudeCustomPrompt(
+    promptText,
+    submission,
+    rubric,
+    settings,
+    apiKey,
+    backupApiKey,
+    0.1
+  );
+  return { gradingResult: res.gradingResult, modelUsed: res.modelUsed, reasoning: res.reasoning };
+}
+
+/**
+ * Fallback algorithmic synthesis if Claude synthesis fails
+ */
+function fallbackSynthesizeClaudePasses(
+  passes: { passNumber: number; modelLabel: string; result: GradingResult }[],
+  rubric: RubricData,
+  submission: StudentSubmission
+): GradingResult {
+  const evaluations = passes.map((p) => toModelEvaluation('claude', p.modelLabel, p.result));
+  const synthesizedCriteria: CriterionResult[] = rubric.criteria.map((c) => {
+    const pointsList = evaluations.map((e) => e.awardedPointsByCriterion[c.id] ?? 0);
+    const sorted = [...pointsList].sort((a, b) => a - b);
+    const midIdx = Math.floor(sorted.length / 2);
+    const consensusPoint = sorted.length % 2 !== 0 ? sorted[midIdx] : sorted[midIdx - 1];
+
+    let bestReason = '';
+    let isCorrect: 'full' | 'partial' | 'wrong' =
+      consensusPoint >= c.points ? 'full' : consensusPoint > 0 ? 'partial' : 'wrong';
+
+    for (const ev of evaluations) {
+      if (Math.abs((ev.awardedPointsByCriterion[c.id] ?? 0) - consensusPoint) <= 0.05) {
+        if (ev.reasonsByCriterion[c.id]) {
+          bestReason = ev.reasonsByCriterion[c.id];
+          isCorrect = ev.isCorrectByCriterion[c.id] || isCorrect;
+          break;
+        }
+      }
+    }
+    if (!bestReason && evaluations[0]) {
+      bestReason = evaluations[0].reasonsByCriterion[c.id] || '';
+    }
+
+    return {
+      criterionId: c.id,
+      criterionName: c.name,
+      maxPoints: c.points,
+      awardedPoints: Number(consensusPoint.toFixed(2)),
+      isCorrect,
+      reason: bestReason,
+    };
+  });
+
+  const totalScore = Number(
+    synthesizedCriteria.reduce((sum, c) => sum + c.awardedPoints, 0).toFixed(2)
+  );
+  const maxScore = rubric.totalPoints;
+  const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+
+  const primaryResult =
+    passes.find((p) => Math.abs(p.result.score - totalScore) <= 0.25)?.result || passes[0].result;
+
+  return {
+    studentName: submission.studentName,
+    submissionId: submission.id,
+    score: totalScore,
+    maxScore,
+    percentage,
+    status: 'completed',
+    gradedAt: new Date().toISOString(),
+    generalComment: primaryResult.generalComment,
+    criteriaBreakdown: synthesizedCriteria,
+    strengths: primaryResult.strengths,
+    weaknesses: primaryResult.weaknesses,
+    correctionGuide: primaryResult.correctionGuide,
+    teacherComment: primaryResult.teacherComment,
+    ocrComparison: submission.ocrComparison,
+  };
+}
+
+/**
+ * Chấm điểm 3 lần độc lập bằng Claude (https://apikey.pimath.id.vn/v1) với 3 prompt tối ưu:
+ * - Lần 1: Chuẩn mực theo barem & tiến trình
+ * - Lần 2: Giám khảo phản biện sắc sảo, khó tính & soi lỗi tiềm ẩn
+ * - Lần 3: Chuyên gia sư phạm, bản chất toán học & cách giải khác
+ * Sau đó đưa 3 kết quả vào Vòng tổng hợp (Chủ tịch hội đồng Claude) để chốt kết quả cuối cùng chính xác nhất.
+ */
+export async function gradeWithClaudeTriplePass(
+  submission: StudentSubmission,
+  rubric: RubricData,
+  settings: TeacherSettings,
+  apiKey: string,
+  backupApiKey?: string
+): Promise<{ gradingResult: GradingResult; consensusReport: ConsensusReport }> {
+  if (!apiKey) {
+    throw new Error(
+      'Chưa cấu hình Anthropic Claude API Key. Vui lòng vào Cài Đặt (chọn mục Claude) để nhập API Key, hoặc khai báo ANTHROPIC_API_KEY trong file .env.local.'
+    );
+  }
+
+  // 0. Tự động nhận diện công thức LaTeX bằng Claude OCR nếu chưa có extractedText
+  if (
+    submission.images &&
+    submission.images.length > 0 &&
+    !submission.extractedText &&
+    settings.autoOcrBeforeGrading !== false
+  ) {
+    try {
+      console.log(`[Claude 3-Pass] Tự động đọc công thức toán qua Claude OCR cho ${submission.studentName}...`);
+      const { transcription } = await transcribeImageWithClaude(
+        submission.images,
+        submission.studentName,
+        settings,
+        apiKey,
+        backupApiKey
+      );
+      if (transcription) {
+        submission.extractedText = transcription;
+      }
+    } catch (ocrErr: any) {
+      console.warn('[Claude 3-Pass] OCR cảnh báo (tiếp tục chấm với ảnh gốc):', ocrErr.message || ocrErr);
+    }
+  }
+
+  // 1. Tạo 3 prompt tối ưu theo 3 góc nhìn chuyên môn
+  const prompt1 = buildClaudeTriplePassPrompt(1, rubric, submission.studentName, settings, submission.extractedText);
+  const prompt2 = buildClaudeTriplePassPrompt(2, rubric, submission.studentName, settings, submission.extractedText);
+  const prompt3 = buildClaudeTriplePassPrompt(3, rubric, submission.studentName, settings, submission.extractedText);
+
+  const tasks = [
+    {
+      passNumber: 1,
+      perspective: 'Giám khảo Chuẩn mực Barem',
+      modelLabel: 'Lần 1: Chuẩn Barem',
+      promise: gradeWithClaudeCustomPrompt(prompt1, submission, rubric, settings, apiKey, backupApiKey, 0.1),
+    },
+    {
+      passNumber: 2,
+      perspective: 'Giám khảo Phản biện Soi lỗi',
+      modelLabel: 'Lần 2: Soi Lỗi Phản Biện',
+      promise: gradeWithClaudeCustomPrompt(prompt2, submission, rubric, settings, apiKey, backupApiKey, 0.2),
+    },
+    {
+      passNumber: 3,
+      perspective: 'Chuyên gia Sư phạm & Bản chất',
+      modelLabel: 'Lần 3: Sư Phạm & Bản Chất',
+      promise: gradeWithClaudeCustomPrompt(prompt3, submission, rubric, settings, apiKey, backupApiKey, 0.2),
+    },
+  ];
+
+  console.log(`[Claude 3-Pass] Khởi động 3 lượt chấm song song bằng Claude cho học sinh ${submission.studentName}...`);
+  const settled = await Promise.allSettled(tasks.map((t) => t.promise));
+
+  const successfulPasses: {
+    passNumber: number;
+    perspective: string;
+    modelLabel: string;
+    result: GradingResult;
+    modelUsed: string;
+  }[] = [];
+  const failedPasses: { provider: string; reason: string }[] = [];
+
+  settled.forEach((res, idx) => {
+    const t = tasks[idx];
+    if (res.status === 'fulfilled') {
+      successfulPasses.push({
+        passNumber: t.passNumber,
+        perspective: t.perspective,
+        modelLabel: t.modelLabel,
+        result: res.value.gradingResult,
+        modelUsed: res.value.modelUsed,
+      });
+    } else {
+      const msg = res.reason?.message || 'Lỗi không xác định';
+      console.error(`[Claude 3-Pass] ${t.modelLabel} thất bại:`, msg);
+      failedPasses.push({
+        provider: `Claude (${t.modelLabel})`,
+        reason: msg,
+      });
+    }
+  });
+
+  if (successfulPasses.length === 0) {
+    throw new Error(
+      `Cả 3 lượt chấm bằng Claude đều thất bại: ${failedPasses.map((f) => f.reason).join(' | ')}`
+    );
+  }
+
+  // 2. Chuyển đổi thành danh sách ModelEvaluation để đối chiếu
+  const evaluations: ModelEvaluation[] = successfulPasses.map((sp) =>
+    toModelEvaluation('claude', sp.modelLabel, sp.result)
+  );
+
+  // 3. Vòng Tổng Hợp: Hội đồng Claude thẩm định và chốt kết quả tối ưu
+  let finalGradingResult: GradingResult;
+  let synthesisSummary = '';
+
+  if (successfulPasses.length >= 2) {
+    try {
+      console.log(`[Claude 3-Pass] Chạy Vòng Tổng Hợp (Chủ tịch hội đồng Claude)...`);
+      const synthesisPrompt = buildClaudeSynthesisPrompt(
+        rubric,
+        submission.studentName,
+        settings,
+        successfulPasses.map((sp) => ({
+          passNumber: sp.passNumber,
+          perspective: sp.perspective,
+          result: sp.result,
+        })),
+        submission.extractedText
+      );
+
+      const synthRes = await gradeWithClaudeCustomPrompt(
+        synthesisPrompt,
+        submission,
+        rubric,
+        settings,
+        apiKey,
+        backupApiKey,
+        0.1
+      );
+
+      finalGradingResult = synthRes.gradingResult;
+      const parsedRaw = extractJsonFromText(synthRes.rawOutput || '');
+      if (parsedRaw && parsedRaw.synthesisSummary) {
+        synthesisSummary = parsedRaw.synthesisSummary;
+      }
+    } catch (synthErr: any) {
+      console.warn(
+        '[Claude 3-Pass] Vòng tổng hợp Claude gặp sự cố, chuyển sang thuật toán dung hòa trung vị:',
+        synthErr.message || synthErr
+      );
+      finalGradingResult = fallbackSynthesizeClaudePasses(successfulPasses, rubric, submission);
+    }
+  } else {
+    // Chỉ 1 lần thành công
+    finalGradingResult = successfulPasses[0].result;
+  }
+
+  // Đảm bảo thông tin bài làm chính xác
+  finalGradingResult.studentName = submission.studentName;
+  finalGradingResult.submissionId = submission.id;
+  finalGradingResult.maxScore = rubric.totalPoints;
+  finalGradingResult.status = 'completed';
+  finalGradingResult.gradedAt = new Date().toISOString();
+  finalGradingResult.ocrComparison = submission.ocrComparison;
+  if (finalGradingResult.maxScore > 0) {
+    finalGradingResult.percentage = Math.round((finalGradingResult.score / finalGradingResult.maxScore) * 100);
+  }
+
+  // 4. Báo cáo đối chiếu ConsensusReport
+  const scores = evaluations.map((e) => e.score);
+  const scoreDiff = scores.length > 1 ? Number((Math.max(...scores) - Math.min(...scores)).toFixed(2)) : 0;
+  const tolerance = settings.consensusTolerance ?? 0.25;
+
+  let consensusStatus: ConsensusReport['status'] = 'unanimous';
+  if (evaluations.length === 1) {
+    consensusStatus = 'single_model';
+  } else if (scoreDiff <= 0.05) {
+    consensusStatus = 'unanimous';
+  } else if (scoreDiff <= tolerance) {
+    consensusStatus = 'majority';
+  } else {
+    consensusStatus = 'resolved_after_retry';
+  }
+
+  const passScoresText = successfulPasses
+    .map((sp) => `${sp.modelLabel}: ${sp.result.score}đ`)
+    .join(' | ');
+
+  let summaryText = '';
+  if (evaluations.length === 1) {
+    summaryText = `Chỉ có 1/3 lần chấm Claude hoàn thành (${passScoresText}). Điểm: ${finalGradingResult.score}/${rubric.totalPoints}đ.`;
+  } else if (consensusStatus === 'unanimous') {
+    summaryText = `Đồng thuận tuyệt đối 3 lần chấm Claude (${passScoresText}). Điểm chốt: ${finalGradingResult.score}/${rubric.totalPoints}đ.`;
+  } else if (consensusStatus === 'majority') {
+    summaryText = `Đồng thuận đa số giữa các lần chấm Claude (Độ lệch: ${scoreDiff}đ | ${passScoresText}). Điểm chốt: ${finalGradingResult.score}/${rubric.totalPoints}đ.`;
+  } else {
+    summaryText = `Hội đồng Claude đã phân xử chênh lệch giữa các lần chấm (Độ lệch: ${scoreDiff}đ | ${passScoresText}). Điểm chốt tối ưu: ${finalGradingResult.score}/${rubric.totalPoints}đ.`;
+  }
+  if (synthesisSummary) {
+    summaryText += ` [Hội đồng: ${synthesisSummary}]`;
+  }
+
+  const consensusReport: ConsensusReport = {
+    roundCount: 1,
+    regradeCount: 0,
+    status: consensusStatus,
+    modelsUsed: successfulPasses.map((sp) => `Claude (${sp.modelLabel})`),
+    scoreDifference: scoreDiff,
+    evaluations,
+    summary: summaryText,
+    failedModels: failedPasses,
+  };
+
+  finalGradingResult.consensusReport = consensusReport;
+
+  return { gradingResult: finalGradingResult, consensusReport };
+}
+
 
 /**
  * Grade using OpenAI / OpenAPI-compatible API (GPT-4o, GPT-4o-mini, o3-mini, OpenRouter, DeepSeek, etc.)
@@ -1526,47 +2021,71 @@ export async function gradeWithOpenAI(
     requestBody.response_format = { type: 'json_object' };
   }
 
-  let response = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requestBody),
-  });
+  let response: Response | null = null;
+  let lastError: any = null;
+  const MAX_FETCH_RETRIES = 3;
 
-  // If response_format caused an error on third-party OpenAPI proxies, retry without response_format
-  if (!response.ok && requestBody.response_format) {
-    delete requestBody.response_format;
-    response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
+  for (let attempt = 1; attempt <= MAX_FETCH_RETRIES; attempt++) {
+    try {
+      let res = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      // If response_format caused an error on third-party OpenAPI proxies, retry without response_format
+      if (!res.ok && requestBody.response_format) {
+        delete requestBody.response_format;
+        res = await fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        });
+      }
+
+      if (!res.ok) {
+        let errorDetail = res.statusText;
+        try {
+          const errJson = await res.json();
+          errorDetail = errJson.error?.message || errJson.message || JSON.stringify(errJson);
+        } catch {
+          // ignore
+        }
+        if ((res.status === 401 || /invalid api key|incorrect api key/i.test(errorDetail)) && backupApiKey && backupApiKey !== apiKey) {
+          console.warn('[OpenAI] Key trình duyệt không hợp lệ. Đang tự động chuyển sang server backup key từ .env.local...');
+          return gradeWithOpenAI(submission, rubric, settings, backupApiKey);
+        }
+        if (/credit_balance_exhausted|insufficient_quota|you have no credits/i.test(errorDetail)) {
+          throw new Error('OpenAI: Tài khoản hết số dư / hạn mức (Credit balance exhausted).');
+        }
+        if (res.status === 401 || /invalid api key|incorrect api key/i.test(errorDetail)) {
+          throw new Error('OpenAI: API Key không hợp lệ (401 Unauthorized).');
+        }
+        throw new Error(`Lỗi từ OpenAI / OpenAPI (${res.status}): ${errorDetail}`);
+      }
+
+      response = res;
+      break;
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[OpenAI] Lần ${attempt}/${MAX_FETCH_RETRIES} gặp lỗi:`, err.message || err);
+      if (/401|invalid api key|credit_balance_exhausted/i.test(err.message || '')) {
+        throw err;
+      }
+      if (attempt < MAX_FETCH_RETRIES) {
+        await new Promise((r) => setTimeout(r, attempt * 1200));
+      }
+    }
   }
 
-  if (!response.ok) {
-    let errorDetail = response.statusText;
-    try {
-      const errJson = await response.json();
-      errorDetail = errJson.error?.message || errJson.message || JSON.stringify(errJson);
-    } catch {
-      // ignore
-    }
-    if ((response.status === 401 || /invalid api key|incorrect api key/i.test(errorDetail)) && backupApiKey && backupApiKey !== apiKey) {
-      console.warn('[OpenAI] Key trình duyệt không hợp lệ. Đang tự động chuyển sang server backup key từ .env.local...');
-      return gradeWithOpenAI(submission, rubric, settings, backupApiKey);
-    }
-    if (/credit_balance_exhausted|insufficient_quota|you have no credits/i.test(errorDetail)) {
-      throw new Error('OpenAI: Tài khoản hết số dư / hạn mức (Credit balance exhausted).');
-    }
-    if (response.status === 401 || /invalid api key|incorrect api key/i.test(errorDetail)) {
-      throw new Error('OpenAI: API Key không hợp lệ (401 Unauthorized).');
-    }
-    throw new Error(`Lỗi từ OpenAI / OpenAPI (${response.status}): ${errorDetail}`);
+  if (!response || !response.ok) {
+    throw lastError || new Error(`OpenAI API thất bại sau ${MAX_FETCH_RETRIES} lần thử.`);
   }
 
   const data = await response.json();

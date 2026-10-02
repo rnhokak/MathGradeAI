@@ -37,7 +37,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     ...settings,
     provider: settings.provider || 'claude',
     strictness: settings.strictness || 'strict',
-    gradingMode: settings.gradingMode || 'single',
+    gradingMode: settings.gradingMode || 'claude_triple_pass',
     autoOcrBeforeGrading: settings.autoOcrBeforeGrading ?? false,
     queueDelayMs: settings.queueDelayMs ?? 2000,
     maxRegradeRetries: settings.maxRegradeRetries ?? 2,
@@ -284,8 +284,55 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               Chọn phương thức chấm bài thi tự luận môn Toán.
             </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              {/* Option 1: 3 Models Consensus */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px' }}>
+              {/* Option 1: Claude 3 Times (Triple-Pass Consensus) */}
+              <button
+                type="button"
+                onClick={() => setCurrent({ ...current, gradingMode: 'claude_triple_pass', provider: 'claude' })}
+                style={{
+                  padding: '14px',
+                  borderRadius: 'var(--radius-md)',
+                  border:
+                    current.gradingMode === 'claude_triple_pass'
+                      ? '2px solid #f59e0b'
+                      : '1px solid var(--border-subtle)',
+                  background:
+                    current.gradingMode === 'claude_triple_pass'
+                      ? 'rgba(245, 158, 11, 0.16)'
+                      : 'rgba(255, 255, 255, 0.03)',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow:
+                    current.gradingMode === 'claude_triple_pass'
+                      ? '0 0 16px rgba(245, 158, 11, 0.25)'
+                      : 'none',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '6px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Sparkles size={16} color="#f59e0b" />
+                    <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.88rem' }}>
+                      Claude 3 Lần (Tối Ưu)
+                    </span>
+                  </div>
+                  <span className="badge badge-amber" style={{ fontSize: '0.65rem', padding: '2px 6px' }}>
+                    Khuyên dùng ⭐
+                  </span>
+                </div>
+                <p style={{ fontSize: '0.74rem', color: '#cbd5e1', lineHeight: 1.4 }}>
+                  Chấm 3 lần độc lập bằng <strong>Claude</strong> qua <code>apikey.pimath.id.vn</code> (Barem + Soi lỗi + Sư phạm), sau đó Hội đồng Claude tổng hợp kết quả chính xác nhất.
+                </p>
+              </button>
+
+              {/* Option 2: 3 Models Consensus */}
               <button
                 type="button"
                 onClick={() => setCurrent({ ...current, gradingMode: 'triple_consensus' })}
@@ -320,19 +367,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Layers size={16} color="#818cf8" />
                     <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.88rem' }}>
-                      Đối Chiếu 3 Model AI
+                      Đối Chiếu Đa Model
                     </span>
                   </div>
-                  <span className="badge badge-indigo" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
-                    Đối chiếu song song
+                  <span className="badge badge-indigo" style={{ fontSize: '0.65rem', padding: '2px 6px' }}>
+                    3 AI Khác Nhau
                   </span>
                 </div>
-                <p style={{ fontSize: '0.75rem', color: '#cbd5e1', lineHeight: 1.4 }}>
-                  Chạy song song <strong>Gemini + Claude + GPT-4o</strong> cùng prompt & rubric. Tự động so sánh và <strong>tự động chấm lại</strong> nếu phát hiện lệch điểm để kết quả luôn công tâm, chính xác nhất.
+                <p style={{ fontSize: '0.74rem', color: '#cbd5e1', lineHeight: 1.4 }}>
+                  Chạy song song <strong>Gemini + Claude + GPT-4o</strong> cùng prompt & rubric. Tự động so sánh chéo giữa các nền tảng AI khác nhau.
                 </p>
               </button>
 
-              {/* Option 2: Single Model */}
+              {/* Option 3: Single Model */}
               <button
                 type="button"
                 onClick={() => setCurrent({ ...current, gradingMode: 'single' })}
@@ -367,15 +414,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Bot size={16} color="#06b6d4" />
                     <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.88rem' }}>
-                      Chấm 1 Model duy nhất
+                      Chấm 1 Lần Nhanh
                     </span>
                   </div>
-                  <span className="badge badge-emerald" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
-                    Mặc định
+                  <span className="badge badge-emerald" style={{ fontSize: '0.65rem', padding: '2px 6px' }}>
+                    Đơn lẻ
                   </span>
                 </div>
-                <p style={{ fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.4 }}>
-                  Chỉ gọi 1 mô hình đã chọn bên dưới (Mặc định: <strong>Claude Opus 5</strong>). Tiết kiệm token và phản hồi nhanh chóng.
+                <p style={{ fontSize: '0.74rem', color: '#94a3b8', lineHeight: 1.4 }}>
+                  Chỉ gọi 1 mô hình đã chọn bên dưới (ví dụ Claude Opus 5). Tiết kiệm token và phản hồi nhanh chóng cho các bài thi ngắn.
                 </p>
               </button>
             </div>
@@ -397,12 +444,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontWeight: 700, fontSize: '0.86rem', color: '#f8fafc' }}>
-                    📐 Tự động đọc & đối chiếu công thức bằng 3 Model trước khi chấm
+                    📐 Tự động đọc & đối chiếu công thức bằng AI OCR trước khi chấm
                   </span>
                   <span className="badge badge-emerald" style={{ fontSize: '0.65rem' }}>Khuyên dùng</span>
                 </div>
                 <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px', lineHeight: 1.4 }}>
-                  Khi bài làm có ảnh viết tay, hệ thống sẽ tự động dùng Gemini, Claude, GPT-4o để phiên âm từng dòng chữ, căn thức, số mũ sang LaTeX và hợp nhất trước khi chấm theo tiêu chí.
+                  Khi bài làm có ảnh viết tay, hệ thống sẽ tự động dùng AI để phiên âm từng dòng chữ, căn thức, số mũ sang LaTeX và đối chiếu nét mực thực tế trước khi chấm.
                 </p>
               </div>
 
@@ -415,7 +462,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
 
             {/* Sub-settings for Queue & Consensus */}
-            {current.gradingMode === 'triple_consensus' && (
+            {(current.gradingMode === 'triple_consensus' || current.gradingMode === 'claude_triple_pass') && (
               <div
                 style={{
                   marginTop: '12px',
@@ -424,7 +471,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   borderRadius: 'var(--radius-sm)',
                   border: '1px solid var(--border-subtle)',
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
                   gap: '12px',
                 }}
               >
@@ -447,7 +494,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <div>
                   <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
-                    Ngưỡng lệch điểm chấm lại:
+                    Ngưỡng dung sai chênh lệch:
                   </label>
                   <select
                     className="input-field"
@@ -455,27 +502,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     value={current.consensusTolerance ?? 0.25}
                     onChange={(e) => setCurrent({ ...current, consensusTolerance: Number(e.target.value) })}
                   >
-                    <option value={0.1}>&gt; 0.10 điểm (Rất nhạy)</option>
-                    <option value={0.25}>&gt; 0.25 điểm (Chuẩn)</option>
-                    <option value={0.5}>&gt; 0.50 điểm (Thoáng)</option>
+                    <option value={0.1}>&gt; 0.10 điểm (Rất khắt khe)</option>
+                    <option value={0.25}>&gt; 0.25 điểm (Chuẩn sư phạm)</option>
+                    <option value={0.5}>&gt; 0.50 điểm (Linh hoạt)</option>
                   </select>
                 </div>
 
-                <div>
-                  <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
-                    Số lần chấm lại tối đa:
-                  </label>
-                  <select
-                    className="input-field"
-                    style={{ padding: '6px 8px', fontSize: '0.8rem' }}
-                    value={current.maxRegradeRetries ?? 2}
-                    onChange={(e) => setCurrent({ ...current, maxRegradeRetries: Number(e.target.value) })}
-                  >
-                    <option value={1}>1 lần</option>
-                    <option value={2}>2 lần (Chuẩn)</option>
-                    <option value={3}>3 lần</option>
-                  </select>
-                </div>
+                {current.gradingMode === 'triple_consensus' && (
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                      Số lần chấm lại tối đa:
+                    </label>
+                    <select
+                      className="input-field"
+                      style={{ padding: '6px 8px', fontSize: '0.8rem' }}
+                      value={current.maxRegradeRetries ?? 2}
+                      onChange={(e) => setCurrent({ ...current, maxRegradeRetries: Number(e.target.value) })}
+                    >
+                      <option value={1}>1 lần</option>
+                      <option value={2}>2 lần (Chuẩn)</option>
+                      <option value={3}>3 lần</option>
+                    </select>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -494,7 +543,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               }}
             >
               <Cpu size={18} color="#818cf8" />
-              {current.gradingMode === 'triple_consensus'
+              {current.gradingMode === 'claude_triple_pass'
+                ? 'Cấu Hình Claude (https://apikey.pimath.id.vn/v1):'
+                : current.gradingMode === 'triple_consensus'
                 ? 'Cấu Hình 3 Model & API Key:'
                 : 'Chọn Nhà Cung Cấp AI Chấm Bài:'}
             </label>

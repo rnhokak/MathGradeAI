@@ -86,76 +86,102 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
     });
   };
 
-  // Re-grade submission using custom or edited extracted text
+  // Re-grade submission using custom or edited extracted text with automatic 3-attempt retry
   const handleRegradeWithText = async (textToUse: string) => {
     setIsReGrading(true);
-    try {
-      const res = await fetch('/api/grade', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
-          ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
-          ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
-          ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
-        },
-        body: JSON.stringify({
-          submission: {
-            ...submission,
-            extractedText: textToUse,
+    const MAX_RETRIES = 3;
+    let lastError: any = null;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const res = await fetch('/api/grade', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
+            ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
+            ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
+            ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
+            ...(settings.alibabacloudApiKey ? { 'x-alibabacloud-api-key': settings.alibabacloudApiKey } : {}),
           },
-          rubric,
-          settings,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi khi chấm lại');
-      setResult(data.gradingResult);
-      onUpdateResult(data.gradingResult);
-      setIsEditingText(false);
-      triggerConfetti();
-    } catch (err: any) {
-      alert('Lỗi khi chấm lại: ' + err.message);
-    } finally {
-      setIsReGrading(false);
+          body: JSON.stringify({
+            submission: {
+              ...submission,
+              extractedText: textToUse,
+            },
+            rubric,
+            settings,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Lỗi khi chấm lại');
+        setResult(data.gradingResult);
+        onUpdateResult(data.gradingResult);
+        setIsEditingText(false);
+        triggerConfetti();
+        setIsReGrading(false);
+        return;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[Chấm lại] Lần ${attempt}/${MAX_RETRIES} gặp lỗi:`, err.message || err);
+        if (attempt < MAX_RETRIES) {
+          await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+        }
+      }
     }
+
+    setIsReGrading(false);
+    alert(`Đã thử lại 3 lần nhưng đều thất bại (${lastError?.message || 'Lỗi không xác định'})`);
   };
 
-  // Run OCR with models on demand
+  // Run OCR with models on demand with automatic 3-attempt retry
   const handleRerunOcr = async () => {
     setIsReRunningOcr(true);
-    try {
-      const res = await fetch('/api/ocr', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
-          ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
-          ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
-          ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
-        },
-        body: JSON.stringify({
-          submission,
-          settings,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi khi nhận diện công thức');
-      setCustomExtractedText(data.consensusText);
-      if (result) {
-        const updated = {
-          ...result,
-          ocrComparison: data.ocrComparison,
-        };
-        setResult(updated);
-        onUpdateResult(updated);
+    const MAX_RETRIES = 3;
+    let lastError: any = null;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const res = await fetch('/api/ocr', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
+            ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
+            ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
+            ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
+            ...(settings.alibabacloudApiKey ? { 'x-alibabacloud-api-key': settings.alibabacloudApiKey } : {}),
+          },
+          body: JSON.stringify({
+            submission,
+            settings,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Lỗi khi nhận diện công thức');
+        setCustomExtractedText(data.consensusText);
+        if (result) {
+          const updated = {
+            ...result,
+            ocrComparison: data.ocrComparison,
+          };
+          setResult(updated);
+          onUpdateResult(updated);
+        }
+        setLeftTab('ocr_comparison');
+        setIsReRunningOcr(false);
+        return;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[OCR lại] Lần ${attempt}/${MAX_RETRIES} gặp lỗi:`, err.message || err);
+        if (attempt < MAX_RETRIES) {
+          await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+        }
       }
-      setLeftTab('ocr_comparison');
-    } catch (err: any) {
-      alert('Lỗi khi đọc công thức bằng 3 model: ' + err.message);
-    } finally {
-      setIsReRunningOcr(false);
     }
+
+    setIsReRunningOcr(false);
+    alert(`Đã thử đọc công thức 3 lần nhưng đều thất bại (${lastError?.message || 'Lỗi không xác định'})`);
   };
 
   // Copy teacher feedback formatted for Zalo / SMS / Classroom
@@ -853,158 +879,167 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
             )}
           </div>
 
-          {/* BẢNG ĐỐI CHIẾU 3 MODEL AI (NẾU CÓ BÁO CÁO CONSENSUS) */}
-          {result.consensusReport && (
-            <div
-              className="glass-panel"
-              style={{
-                padding: '18px 20px',
-                background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.85))',
-                border: '1px solid rgba(99, 102, 241, 0.35)',
-                boxShadow: '0 4px 20px rgba(99, 102, 241, 0.1)',
-              }}
-            >
+          {/* BẢNG ĐỐI CHIẾU 3 MODEL AI HOẶC 3 LẦN CHẤM CLAUDE */}
+          {result.consensusReport && (() => {
+            const isClaudeTriple =
+              result.consensusReport.evaluations.length > 0 &&
+              result.consensusReport.evaluations.every((e) => e.provider === 'claude');
+
+            return (
               <div
+                className="glass-panel"
                 style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '10px',
-                  cursor: 'pointer',
+                  padding: '18px 20px',
+                  background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.85))',
+                  border: isClaudeTriple ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid rgba(99, 102, 241, 0.35)',
+                  boxShadow: isClaudeTriple ? '0 4px 20px rgba(245, 158, 11, 0.15)' : '0 4px 20px rgba(99, 102, 241, 0.1)',
                 }}
-                onClick={() => setShowConsensusDetails(!showConsensusDetails)}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Sparkles size={18} color="#818cf8" />
-                  <h3 style={{ fontSize: '0.96rem', fontWeight: 700, color: '#f8fafc' }}>
-                    {result.consensusReport.evaluations.length >= 3
-                      ? 'Bảng Đối Chiếu Điểm 3 Model AI (Gemini + Claude + GPT-4o)'
-                      : result.consensusReport.evaluations.length === 2
-                      ? 'Bảng Đối Chiếu Điểm 2 Model AI'
-                      : `Bảng Điểm AI — Chỉ 1 Model Hoàn Thành (${result.consensusReport.evaluations[0]?.provider?.toUpperCase() || 'AI'})`}
-                  </h3>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  {result.consensusReport.status === 'single_model' && (
-                    <span className="badge badge-amber" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
-                      <AlertTriangle size={12} /> Chỉ 1 Model hoàn thành (1/3)
-                    </span>
-                  )}
-                  {result.consensusReport.status === 'unanimous' && (
-                    <span className="badge badge-emerald" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
-                      <CheckCircle size={12} /> Đồng thuận tuyệt đối (3/3)
-                    </span>
-                  )}
-                  {result.consensusReport.status === 'majority' && (
-                    <span className="badge badge-amber" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
-                      <Layers size={12} /> Đồng thuận {result.consensusReport.evaluations.length >= 3 ? 'đa số (2/3)' : '2 Model'}
-                    </span>
-                  )}
-                  {result.consensusReport.status === 'resolved_after_retry' && (
-                    <span className="badge badge-indigo" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
-                      <RefreshCw size={12} /> Đã chấm lại {result.consensusReport.regradeCount} lần
-                    </span>
-                  )}
-                  {result.consensusReport.status === 'conflict' && (
-                    <span className="badge badge-rose" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
-                      <AlertTriangle size={12} /> Lệch {result.consensusReport.scoreDifference}đ
-                    </span>
-                  )}
-
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ padding: '4px', borderRadius: '50%' }}
-                  >
-                    {showConsensusDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Warning banner if any model failed due to quota/network */}
-              {result.consensusReport.failedModels && result.consensusReport.failedModels.length > 0 && (
                 <div
                   style={{
-                    padding: '8px 12px',
-                    marginBottom: '10px',
-                    borderRadius: 'var(--radius-sm)',
-                    background: 'rgba(245, 158, 11, 0.1)',
-                    border: '1px solid rgba(245, 158, 11, 0.25)',
-                    color: '#fde68a',
-                    fontSize: '0.78rem',
                     display: 'flex',
+                    justifyContent: 'space-between',
                     alignItems: 'center',
-                    gap: '8px',
+                    marginBottom: '10px',
+                    cursor: 'pointer',
                   }}
+                  onClick={() => setShowConsensusDetails(!showConsensusDetails)}
                 >
-                  <AlertTriangle size={14} color="#fbbf24" style={{ flexShrink: 0 }} />
-                  <span>
-                    <strong>Cảnh báo hạn mức:</strong> {result.consensusReport.failedModels.map((f) => `${f.provider}: ${f.reason}`).join(' | ')}.
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Sparkles size={18} color={isClaudeTriple ? '#f59e0b' : '#818cf8'} />
+                    <h3 style={{ fontSize: '0.96rem', fontWeight: 700, color: '#f8fafc' }}>
+                      {isClaudeTriple
+                        ? 'Bảng Đối Chiếu Chấm 3 Lần Bằng Claude (Tối Ưu & Tổng Hợp)'
+                        : result.consensusReport.evaluations.length >= 3
+                        ? 'Bảng Đối Chiếu Điểm 3 Model AI (Gemini + Claude + GPT-4o)'
+                        : result.consensusReport.evaluations.length === 2
+                        ? 'Bảng Đối Chiếu Điểm 2 Model AI'
+                        : `Bảng Điểm AI — Chỉ 1 Model Hoàn Thành (${result.consensusReport.evaluations[0]?.provider?.toUpperCase() || 'AI'})`}
+                    </h3>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {result.consensusReport.status === 'single_model' && (
+                      <span className="badge badge-amber" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
+                        <AlertTriangle size={12} /> {isClaudeTriple ? 'Chỉ 1 lượt Claude (1/3)' : 'Chỉ 1 Model hoàn thành (1/3)'}
+                      </span>
+                    )}
+                    {result.consensusReport.status === 'unanimous' && (
+                      <span className="badge badge-emerald" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
+                        <CheckCircle size={12} /> {isClaudeTriple ? 'Đồng thuận tuyệt đối 3 lần chấm' : 'Đồng thuận tuyệt đối (3/3)'}
+                      </span>
+                    )}
+                    {result.consensusReport.status === 'majority' && (
+                      <span className="badge badge-amber" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
+                        <Layers size={12} /> {isClaudeTriple ? 'Đồng thuận đa số (Claude)' : `Đồng thuận ${result.consensusReport.evaluations.length >= 3 ? 'đa số (2/3)' : '2 Model'}`}
+                      </span>
+                    )}
+                    {result.consensusReport.status === 'resolved_after_retry' && (
+                      <span className="badge badge-indigo" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
+                        <RefreshCw size={12} /> {isClaudeTriple ? 'Hội đồng Claude tổng hợp & chốt điểm' : `Đã chấm lại ${result.consensusReport.regradeCount} lần`}
+                      </span>
+                    )}
+                    {result.consensusReport.status === 'conflict' && (
+                      <span className="badge badge-rose" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
+                        <AlertTriangle size={12} /> Lệch {result.consensusReport.scoreDifference}đ
+                      </span>
+                    )}
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '4px', borderRadius: '50%' }}
+                    >
+                      {showConsensusDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                  </div>
                 </div>
-              )}
 
-              {/* Summary note */}
-              <div style={{ fontSize: '0.82rem', color: '#cbd5e1', lineHeight: '1.5', marginBottom: showConsensusDetails ? '14px' : '0' }}>
-                <MathRenderer text={result.consensusReport.summary} />
-              </div>
-
-              {/* Comparison Table */}
-              {showConsensusDetails && (
-                <div style={{ overflowX: 'auto', marginTop: '10px' }}>
-                  <table
+                {/* Warning banner if any model failed due to quota/network */}
+                {result.consensusReport.failedModels && result.consensusReport.failedModels.length > 0 && (
+                  <div
                     style={{
-                      width: '100%',
-                      borderCollapse: 'collapse',
-                      fontSize: '0.8rem',
-                      textAlign: 'left',
+                      padding: '8px 12px',
+                      marginBottom: '10px',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'rgba(245, 158, 11, 0.1)',
+                      border: '1px solid rgba(245, 158, 11, 0.25)',
+                      color: '#fde68a',
+                      fontSize: '0.78rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
                     }}
                   >
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
-                        <th style={{ padding: '8px 10px', fontWeight: 600 }}>Tiêu chí thang điểm</th>
-                        {result.consensusReport.evaluations.map((ev, idx) => {
-                          const isFallback = ev.modelName.includes('Dự phòng');
-                          const headerLabel = isFallback
-                            ? `${ev.provider.toUpperCase()} (Dự phòng)`
-                            : ev.provider === 'alibabacloud'
-                            ? `QWEN (Alibaba Cloud)`
-                            : ev.provider === 'openrouter'
-                            ? `QWEN (${ev.modelName.replace(/^qwen\//i, '').split('-').slice(0, 3).join('-')})`
-                            : `${ev.provider.toUpperCase()} (${ev.modelName.split('-').slice(0, 2).join('-')})`;
-                          return (
-                            <th
-                              key={idx}
-                              style={{
-                                padding: '8px 10px',
-                                fontWeight: 600,
-                                textAlign: 'center',
-                                color: isFallback ? '#fbbf24' : undefined,
-                              }}
-                              title={
-                                isFallback
-                                  ? 'Đang dùng Gemini 3.7 Flash dự phòng do tài khoản OpenAI hết hạn mức tín dụng ($0 credits)'
-                                  : undefined
-                              }
-                            >
-                              {headerLabel}
-                            </th>
-                          );
-                        })}
-                        <th
-                          style={{
-                            padding: '8px 10px',
-                            fontWeight: 700,
-                            textAlign: 'center',
-                            color: '#34d399',
-                            background: 'rgba(52, 211, 153, 0.08)',
-                          }}
-                        >
-                          Điểm Đồng Thuận
-                        </th>
-                      </tr>
-                    </thead>
+                    <AlertTriangle size={14} color="#fbbf24" style={{ flexShrink: 0 }} />
+                    <span>
+                      <strong>Cảnh báo hạn mức:</strong> {result.consensusReport.failedModels.map((f) => `${f.provider}: ${f.reason}`).join(' | ')}.
+                    </span>
+                  </div>
+                )}
+
+                {/* Summary note */}
+                <div style={{ fontSize: '0.82rem', color: '#cbd5e1', lineHeight: '1.5', marginBottom: showConsensusDetails ? '14px' : '0' }}>
+                  <MathRenderer text={result.consensusReport.summary} />
+                </div>
+
+                {/* Comparison Table */}
+                {showConsensusDetails && (
+                  <div style={{ overflowX: 'auto', marginTop: '10px' }}>
+                    <table
+                      style={{
+                        width: '100%',
+                        borderCollapse: 'collapse',
+                        fontSize: '0.8rem',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                          <th style={{ padding: '8px 10px', fontWeight: 600 }}>Tiêu chí thang điểm</th>
+                          {result.consensusReport.evaluations.map((ev, idx) => {
+                            const isFallback = ev.modelName.includes('Dự phòng');
+                            const headerLabel = isClaudeTriple
+                              ? `CLAUDE: ${ev.modelName}`
+                              : isFallback
+                              ? `${ev.provider.toUpperCase()} (Dự phòng)`
+                              : ev.provider === 'alibabacloud'
+                              ? `QWEN (Alibaba Cloud)`
+                              : ev.provider === 'openrouter'
+                              ? `QWEN (${ev.modelName.replace(/^qwen\//i, '').split('-').slice(0, 3).join('-')})`
+                              : `${ev.provider.toUpperCase()} (${ev.modelName.split('-').slice(0, 2).join('-')})`;
+                            return (
+                              <th
+                                key={idx}
+                                style={{
+                                  padding: '8px 10px',
+                                  fontWeight: 600,
+                                  textAlign: 'center',
+                                  color: isFallback ? '#fbbf24' : isClaudeTriple ? '#f59e0b' : undefined,
+                                }}
+                                title={
+                                  isFallback
+                                    ? 'Đang dùng Gemini 3.7 Flash dự phòng do tài khoản OpenAI hết hạn mức tín dụng ($0 credits)'
+                                    : undefined
+                                }
+                              >
+                                {headerLabel}
+                              </th>
+                            );
+                          })}
+                          <th
+                            style={{
+                              padding: '8px 10px',
+                              fontWeight: 700,
+                              textAlign: 'center',
+                              color: '#34d399',
+                              background: 'rgba(52, 211, 153, 0.08)',
+                            }}
+                          >
+                            {isClaudeTriple ? 'Điểm Hội Đồng Chốt' : 'Điểm Đồng Thuận'}
+                          </th>
+                        </tr>
+                      </thead>
                     <tbody>
                       {rubric.criteria.map((c) => {
                         const agreedPoints =
@@ -1095,7 +1130,8 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {/* 1. NHẬN XÉT CHUNG */}
           <div

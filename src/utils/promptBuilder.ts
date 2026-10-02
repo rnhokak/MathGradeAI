@@ -10,22 +10,20 @@ CHẾ ĐỘ CHẤM: KHẮT KHE (STRICT)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • Mọi thiếu sót dù nhỏ đều bị trừ điểm — không có ngoại lệ.
 • Thiếu điều kiện xác định → trừ TOÀN BỘ điểm tiêu chí đó (dù bước toán sau đúng).
-• Ghi sai ký hiệu (ví dụ viết "t ≥ 0" thay vì "x > 0") → không cho điểm ý đó.
-• Bỏ qua một nhánh nghiệm, không đối chiếu nghiệm vào điều kiện → không cho điểm tiêu chí kết luận.
+• Ghi sai ký hiệu (ví dụ viết "x ≥ 0" thay vì "x > 0") → trừ điểm dứt khoát ý đó.
+• Bỏ qua nhánh nghiệm, không đối chiếu nghiệm vào điều kiện → trừ điểm tiêu chí kết luận.
 • Kết quả đúng nhưng thiếu lập luận trung gian → chỉ cho điểm tương xứng phần làm được.
 • Làm tắt mà không trình bày đủ các bước theo yêu cầu → trừ điểm các bước bị bỏ qua.
-• Lời nhận xét: thẳng thắn, dứt khoát, chỉ rõ lỗi ở đâu và lý do bị trừ điểm.`;
+• Lời phê: Cực kỳ ngắn gọn, nói thẳng ý, gạch đúng lỗi sai, tuyệt đối không vòng vo rào đón.`;
   }
 
   if (strictness === 'encouraging') {
     return `\
 CHẾ ĐỘ CHẤM: KHUYẾN KHÍCH (ENCOURAGING)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Ưu tiên ghi nhận tư duy đúng dù trình bày chưa hoàn hảo.
-• Cho điểm nếu ý tưởng và hướng giải đúng, dù thiếu một bước nhỏ về hình thức.
-• Sơ suất nhỏ về ký hiệu hoặc quên ghi điều kiện không ảnh hưởng nhiều đến điểm.
-• Tập trung vào việc động viên, giải thích cách làm tốt hơn chứ không thiên về trừ điểm.
-• Lời nhận xét: ân cần, khuyến khích, nhấn mạnh điểm học sinh đã làm tốt.`;
+• Ghi nhận tư duy đúng dù trình bày còn thiếu sót nhỏ về hình thức.
+• Cho điểm nếu ý tưởng và hướng giải đúng bản chất toán học.
+• Lời phê: Ngắn gọn, chỉ thẳng điểm làm tốt và lỗi cần sửa, chân thành, không nói vòng vo.`;
   }
 
   // standard (default)
@@ -36,7 +34,7 @@ CHẾ ĐỘ CHẤM: CHUẨN KỲ THI (STANDARD)
 • Thiếu điều kiện xác định hoặc thiếu đối chiếu nghiệm → trừ điểm tiêu chí tương ứng.
 • Cho điểm nếu cách giải khác đúng bản chất toán học và đi đến kết quả chính xác.
 • Sơ suất nhỏ về trình bày (thiếu dấu, viết tắt thông thường) có thể linh hoạt chút ít.
-• Lời nhận xét: cân bằng, chuẩn mực sư phạm, vừa chỉ ra lỗi vừa ghi nhận điểm đúng.`;
+• Lời phê: Trực diện, súc tích, gạch đúng ý/lỗi sai, không rào đón.`;
 }
 
 /**
@@ -200,65 +198,358 @@ QUY TẮC ĐỌC VÀ CHẤM BÀI
    • Tổng điểm cuối (score) = tổng awardedPoints của tất cả tiêu chí, tối đa ${rubric.totalPoints}.
 
 ═══════════════════════════════════════════════════════════
-YÊU CẦU QUAN TRỌNG VỀ LỜI NHẬN XÉT SƯ PHẠM
+YÊU CẦU QUAN TRỌNG VỀ GIỌNG VĂN CHẤM BÀI (TUÂN THỦ TUYỆT ĐỐI)
 ═══════════════════════════════════════════════════════════
-• PHONG CÁCH: Nhận xét PHẢI GIỐNG NGƯỜI THẬT, giống như GIÁO VIÊN THẬT đang trực tiếp chấm bài bằng bút đỏ cho học sinh, và NGẮN GỌN THÔI.
-• Tuyệt đối KHÔNG viết văn phong AI dài dòng, triết lý sáo rỗng, máy móc (không dùng "Dưới góc độ AI", "Dựa trên tiêu chuẩn được cung cấp", v.v.). Lời văn gãy gọn, thiết thực, tự nhiên, thân tình xưng hô "${teacherAddress}".
+• NÓI THẲNG Ý — KHÔNG VÒNG VO — KHÔNG RÀO ĐÓN:
+  - TUYỆT ĐỐI KHÔNG dùng câu mào đầu, rào đón xã giao (CẤM: 'Thầy/Cô thấy em đã rất cố gắng...', 'Nhìn chung bài làm của em...', 'Dưới góc độ sư phạm...', 'Qua bài làm...', 'Về tổng thể...').
+  - ĐI THẲNG VÀO BẢN CHẤT TOÁN HỌC: Đạt ý gì, sai ở đâu, vì sao được hoặc mất điểm.
+  - Văn phong ngắn gọn, trực diện, dứt khoát như chữ phê bằng bút đỏ của giáo viên dạy Toán ngay trên lề bài thi.
 
-CẤU TRÚC NHẬN XÉT GỒM CÁC PHẦN SAU (BÁM SÁT 100%):
+• GẠCH ĐÚNG Ý / LỖI SAI CỤ THỂ:
+  - Chỉ đích danh vị trí sai, ký hiệu sai, bước thiếu, phép tính nhầm.
+  - Tuyệt đối không nói chung chung 'em bị nhầm'. Phải chỉ rõ:
+    Ví dụ: 'Sai ĐKXĐ: viết x >= 0 thay vì x > 0.' / 'Tính nhẩm sai: 2^3 = 6 thay vì 8.' / 'Thiếu bước đối chiếu nghiệm t = -1 với điều kiện t >= 0 nên lấy thừa nghiệm.'
+
+CẤU TRÚC CHI TIẾT CÁC MỤC (BÁM SÁT 100%):
 
 1. NHẬN XÉT CHUNG (generalComment):
-   - CHỈ nhận xét xem học sinh đã biết hướng làm hay chưa, nhận diện được dạng bài hay chưa... Trình bày bài có sạch đẹp, rõ ràng, dễ nhìn hay không.
-   - Nhận xét NGẮN GỌN bằng TỐI ĐA 3 GẠCH ĐẦU DÒNG (mỗi gạch 1 câu ngắn gọn).
-   - KHÔNG nhận xét dài dòng, KHÔNG đi vào chi tiết từng bước ở đây.
+   - ĐÚNG 2 ĐẾN 3 GẠCH ĐẦU DÒNG NGẮN GỌN (mỗi gạch 1 câu trực diện, không rào đón):
+     • Gạch 1: Hướng làm & dạng bài (đúng hướng / nhầm dạng / giải tắt).
+     • Gạch 2: Kỹ năng biến đổi & kết quả (chính xác / sai ở bước nào).
+     • Gạch 3 (nếu cần): Trình bày (mạch lạc / gạch xóa / ẩu).
+   - Tuyệt đối không viết thành đoạn văn lê thê.
 
 2. CHI TIẾT BÀI LÀM (criteriaBreakdown[].reason):
-   - LỒNG GHÉP CẢ TIẾN TRÌNH LÀM BÀI VÀO ĐÂY (đã bỏ mục đánh giá tiến trình riêng biệt).
-   - LỒNG GHÉP CẢ ƯU VÀ NHƯỢC ĐIỂM VÀO TỪNG BƯỚC: Nhận xét đến bước nào phải chỉ ra được học sinh đã làm gì ở bước này, đúng hay sai/thiếu gì, học sinh được điểm chỗ nào, nếu bị trừ điểm thì VÌ SAO BỊ TRỪ.
-   - Không chỉ dừng lại ở việc nói học sinh làm cái gì, mà phải có nhận xét đánh giá sắc sảo, ngắn gọn như giáo viên chữa bài trực tiếp.
+   - Nói thẳng ý, gạch đúng lỗi/bước thực tế:
+     + Nếu đúng: 'Làm đúng: [ghi ngắn gọn bước làm đúng] (+...đ).'
+     + Nếu sai/thiếu: 'Lỗi sai: [chỉ đích danh lỗi, ký hiệu sai, bước thiếu] (-...đ).'
+   - Tối đa 1-2 câu ngắn gọn, không diễn giải vòng vo.
 
-3. ƯU ĐIỂM & NHƯỢC ĐIỂM (strengths / weaknesses):
-   - Tổng hợp lại ngắn gọn, rành mạch để học sinh nhìn vào là thấy rõ mình đã làm được gì và chưa làm được gì.
-   - Mỗi phần chỉ cần 1 - 2 ý ngắn gọn, súc tích (1 câu mỗi ý).
+3. ƯU ĐIỂM (strengths):
+   - 1 đến 2 gạch đầu dòng ngắn gọn, vào thẳng điểm làm tốt nhất (ví dụ: 'Nhận diện đúng dạng phương trình logarit, biết đặt ẩn phụ.', 'Biến đổi đại số chính xác, ra đúng 2 nghiệm.').
 
-4. HƯỚNG DẪN SỬA BÀI VÀ RÚT KINH NGHIỆM (correctionGuide):
-   - Ngắn gọn, thiết thực, chỉ ra cụ thể chỗ sai cần sửa lại như thế nào hoặc lưu ý cốt lõi để học sinh rút kinh nghiệm.
+4. NHƯỢC ĐIỂM (weaknesses):
+   - 1 đến 2 gạch đầu dòng ngắn gọn, chỉ thẳng lỗi sai cụ thể (ví dụ: 'Viết sai ĐKXĐ: ghi x >= 0 thay vì x > 0.', 'Không đối chiếu nghiệm t với điều kiện t >= 0 dẫn đến kết luận thừa nghiệm.').
 
-5. LỜI PHÊ CỦA GIÁO VIÊN (teacherComment):
-   - Đoạn lời phê hoàn chỉnh, ngắn gọn của ${teacherName} gửi đến em ${studentName}, xưng hô ${teacherAddress}, ân cần, khích lệ tinh thần học tập.
+5. HƯỚNG DẪN SỬA BÀI (correctionGuide):
+   - 1 đến 2 câu ngắn gọn, chỉ thẳng cách sửa đúng, không lý thuyết suông (ví dụ: 'Sửa lại ĐKXĐ: log_5(x) xác định khi x > 0. Cần thêm dòng: Vì t >= 0 nên loại nghiệm t = -1, chỉ nhận t = 2.').
+
+6. LỜI PHÊ GIÁO VIÊN (teacherComment):
+   - Tối đa 1-2 câu ngắn gọn, trực diện, chân thật, xưng hô '${teacherAddress}'.
+   - Nhận xét thẳng thắn, khích lệ tự nhiên, TUYỆT ĐỐI KHÔNG sáo rỗng hay rào đón.
+   (Ví dụ: 'Em nắm chắc phương pháp và biến đổi tốt, chỉ cần cẩn thận hơn ở khâu đặt điều kiện để không bị mất điểm đáng tiếc.').
 
 TUYỆT ĐỐI LƯU Ý:
-• BỎ HOÀN TOÀN mục "Đánh giá tiến trình làm bài" (không tạo trường stepByStepAnalysis, nội dung đã lồng vào criteriaBreakdown).
-• BỎ HOÀN TOÀN mục "Kiến thức cần ôn tập lại" (không tạo trường knowledgeToReview).
+• BỎ HOÀN TOÀN mục 'Đánh giá tiến trình làm bài' (không tạo trường stepByStepAnalysis, nội dung đã lồng vào criteriaBreakdown).
+• BỎ HOÀN TOÀN mục 'Kiến thức cần ôn tập lại' (không tạo trường knowledgeToReview).
 
 ═══════════════════════════════════════════════════════════
 KẾT QUẢ CHẤM — TRẢ VỀ JSON DUY NHẤT
 ═══════════════════════════════════════════════════════════
-Hãy trả về kết quả dưới định dạng JSON duy nhất (không bọc trong markdown tick nếu không cần) theo đúng cấu trúc:
+ĐẶC BIỆT LƯU Ý VỀ ĐỊNH DẠNG JSON:
+• Chỉ trả về đúng 1 khối JSON hợp lệ duy nhất, TUYỆT ĐỐI KHÔNG thêm comment // hoặc /* */ trong JSON.
+• Nếu trích dẫn lời học sinh hoặc công thức toán trong chuỗi, hãy dùng dấu nháy đơn '...' thay vì ngoặc kép để không làm hỏng cú pháp JSON.
+
+Cấu trúc JSON yêu cầu:
 {
-  "score": number, // Tổng điểm thực tế học sinh đạt được (ví dụ: 0.75)
-  "maxScore": number, // Điểm tối đa (${rubric.totalPoints})
-  "generalComment": "• [Gạch 1: Học sinh nhận diện dạng bài / hướng làm đúng hay sai]\n• [Gạch 2: Trình bày sạch đẹp, rõ ràng hay gạch xóa, ẩu]\n• [Gạch 3 nếu cần: Nhận xét chung khác, tối đa 3 gạch]",
+  "score": 0.75,
+  "maxScore": ${rubric.totalPoints},
+  "generalComment": "• [Gạch 1: Hướng làm đúng/sai - nói thẳng ý]\\n• [Gạch 2: Biến đổi & kết quả - chỉ rõ chỗ sai nếu có]\\n• [Gạch 3 nếu cần: Trình bày sạch đẹp hay ẩu]",
   "criteriaBreakdown": [
     {
       "criterionId": "id của tiêu chí trong rubric",
       "criterionName": "Tên tiêu chí",
-      "maxPoints": number,
-      "awardedPoints": number,
-      "isCorrect": "full" | "partial" | "wrong",
-      "reason": "Mô tả học sinh đã làm gì tại bước này (tiến trình), chỉ ra đúng/sai/thiếu gì (ưu/nhược), giải thích rõ tại sao được điểm hoặc vì sao bị trừ điểm. Ngắn gọn, tự nhiên như giáo viên phê."
+      "maxPoints": 0.25,
+      "awardedPoints": 0.25,
+      "isCorrect": "full",
+      "reason": "Làm đúng: [ghi bước đúng] (+0.25đ) hoặc Lỗi sai: [chỉ đích danh chỗ sai] (-0.25đ). Nói thẳng ý, không vòng vo."
     }
   ],
   "strengths": [
-    "Ưu điểm tổng hợp 1 (ngắn gọn)...",
-    "Ưu điểm tổng hợp 2 (ngắn gọn)..."
+    "Ưu điểm 1 (ngắn gọn, trực diện)...",
+    "Ưu điểm 2 (ngắn gọn)..."
   ],
   "weaknesses": [
-    "Nhược điểm cần lưu ý 1 (ngắn gọn, cụ thể lỗi ở đâu)...",
-    "Nhược điểm cần lưu ý 2..."
+    "Lỗi sai cụ thể 1 (chỉ đích danh con số, ký hiệu sai)...",
+    "Lỗi sai cụ thể 2..."
   ],
-  "correctionGuide": "Hướng dẫn sửa bài ngắn gọn: chỉ ra cách sửa cụ thể cho chỗ sai để rút kinh nghiệm...",
-  "teacherComment": "Lời phê ngắn gọn, chân tình của ${teacherName} gửi đến em ${studentName}, xưng hô ${teacherAddress}."
+  "correctionGuide": "Chỉ thẳng cách sửa đúng cho lỗi sai, ngắn gọn 1-2 câu...",
+  "teacherComment": "Lời phê trực diện, chân thật, tối đa 1-2 câu của ${teacherName} gửi em ${studentName}, xưng hô ${teacherAddress}."
 }
 `;
 }
+
+/**
+ * Prompt for Claude Triple-Pass Grading (Pass 1: Official Rubric, Pass 2: Adversarial Audit, Pass 3: Pedagogical Insight)
+ */
+export function buildClaudeTriplePassPrompt(
+  pass: 1 | 2 | 3,
+  rubric: RubricData,
+  studentName: string,
+  settings: TeacherSettings,
+  extractedSubmissionText?: string
+): string {
+  const teacherRole = settings.role === 'cô' ? 'Cô' : 'Thầy';
+  const teacherAddress = settings.role === 'cô' ? 'cô và em' : 'thầy và em';
+  const teacherName = settings.teacherName ? `${teacherRole} ${settings.teacherName}` : teacherRole;
+  const strictness = settings.strictness || 'strict';
+
+  let passHeader = '';
+  let passFocusInstructions = '';
+
+  if (pass === 1) {
+    passHeader = `【LẦN CHẤM 1/3: GIÁM KHẢO CHẤM THI CHUẨN MỰC THEO BAREM & TIẾN TRÌNH】`;
+    passFocusInstructions = `\
+═══════════════════════════════════════════════════════════
+TRỌNG TÂM ĐÁNH GIÁ CỦA LẦN 1 (OFFICIAL RUBRIC FIDELITY):
+═══════════════════════════════════════════════════════════
+1. BÁM SÁT BAREM VÀ TIẾN TRÌNH TOÁN HỌC:
+   • Đọc tuần tự bài làm từ đầu đến cuối, phân tích từng bước giải theo đúng trình tự diễn giải của học sinh.
+   • Đối chiếu từng bước trung gian và kết quả với barem điểm đã cho (điều kiện xác định, phép đặt ẩn phụ/biến đổi, nghiệm của phương trình phụ, nghiệm cuối cùng, tập nghiệm).
+2. CHO ĐIỂM CHUẨN XÁC THEO KHỐI LƯỢNG HOÀN THÀNH:
+   • Cho điểm tương xứng với phần học sinh đã thực sự giải đúng trên từng tiêu chí.
+   • Ghi rõ học sinh đã làm được gì và chưa làm được gì ở từng bước. Đánh giá khách quan, chuẩn mực.`;
+  } else if (pass === 2) {
+    passHeader = `【LẦN CHẤM 2/3: GIÁM KHẢO PHẢN BIỆN SẮC SẢO & SOI LỖI TIỀM ẨN】`;
+    passFocusInstructions = `\
+═══════════════════════════════════════════════════════════
+TRỌNG TÂM ĐÁNH GIÁ CỦA LẦN 2 (RIGOROUS AUDITOR / DEVIL'S ADVOCATE):
+═══════════════════════════════════════════════════════════
+Bạn đóng vai Giám khảo Phản biện khó tính, chuyên rà soát các lỗi tiềm ẩn mà người chấm thông thường dễ bỏ qua:
+1. RÀ SOÁT CỰC KỲ KHẮT KHE ĐIỀU KIỆN XÁC ĐỊNH (ĐKXĐ):
+   • CHỐNG THIÊN KIẾN TỰ SỬA LỖI: Kiểm tra xem học sinh có viết "$x \\ge 0$" hoặc "$x \\geqslant 0$" thay vì "$x > 0$" do nhầm lẫn điều kiện căn thức với logarit không? Nếu có $\\rightarrow$ BẮT BUỘC CHỈ RÕ VÀ TRỪ ĐIỂM TIÊU CHÍ ĐIỀU KIỆN!
+   • Kiểm tra xem có thiếu điều kiện mẫu số khác 0, căn thức không âm, biểu thức/cơ số logarit không?
+2. PHÁT HIỆN "SAI LẦM MAY MẮN" (LUCKY ERROR / NGỤY BIỆN TOÁN HỌC):
+   • Học sinh có bị tính sai bước trước nhưng bước sau lại tình cờ ra kết quả đúng đáp án không (ví dụ âm nhân âm thành sai, rồi lại quên dấu âm nên vô tình khớp số)?
+   • NGUYÊN TẮC: Nếu bước biến đổi toán học sai $\\rightarrow$ BẮT BUỘC TRỪ ĐIỂM BƯỚC ĐÓ, KHÔNG CHO ĐIỂM DÙ KẾT QUẢ CUỐI VÔ TÌNH TRÙNG!
+3. ĐỐI CHIẾU NGHIỆM VÀ LOẠI NGHIỆM NGOẠI LAI (EXTRANEOUS ROOTS):
+   • Khi tìm ra nghiệm (nghiệm của ẩn phụ $t$ hoặc nghiệm $x$), học sinh có đối chiếu với ĐKXĐ và ghi rõ nhận/loại không? Nếu quên đối chiếu $\\rightarrow$ trừ điểm tiêu chí kết luận.
+4. KÝ HIỆU & SUY LUẬN LOGIC:
+   • Có lạm dụng dấu tương đương $\\Leftrightarrow$ khi chỉ là phép suy ra $\\Rightarrow$ (như khi bình phương hai vế mà chưa có điều kiện hai vế cùng dấu) không?
+5. TÍNH TOÁN SỐ HỌC:
+   • Soi kỹ từng phép cộng, trừ, nhân, chia, rút gọn. Trừ điểm nghiêm túc, không nể nang nếu có sai sót.`;
+  } else {
+    passHeader = `【LẦN CHẤM 3/3: CHUYÊN GIA SƯ PHẠM, BẢN CHẤT TOÁN HỌC & CÁCH GIẢI KHÁC】`;
+    passFocusInstructions = `\
+═══════════════════════════════════════════════════════════
+TRỌNG TÂM ĐÁNH GIÁ CỦA LẦN 3 (PEDAGOGICAL & DEEP INSIGHT):
+═══════════════════════════════════════════════════════════
+Bạn đóng vai Chuyên gia Sư phạm thấu hiểu tư duy và bản chất toán học:
+1. ĐÁNH GIÁ THEO BẢN CHẤT TƯ DUY TOÁN HỌC:
+   • Học sinh đã nắm được linh hồn và phương pháp giải cốt lõi của bài toán hay chưa? Đánh giá chiều sâu tư duy của học sinh.
+2. CÔNG NHẬN CÁCH GIẢI KHÁC ĐÚNG BẢN CHẤT (ALTERNATIVE VALID METHODS):
+   • Học sinh có giải bằng phương pháp khác barem mẫu không (ví dụ dùng bất đẳng thức thay vì hàm số, đặt ẩn phụ khác, phân tích nhân tử khác, v.v.)?
+   • NGUYÊN TẮC BẤT DI BẤT DỊCH: Nếu cách giải của học sinh ĐÚNG BẢN CHẤT TOÁN HỌC và suy ra kết quả đúng $\\rightarrow$ PHẢI CHO ĐIỂM TỐI ĐA các tiêu chí tương ứng. TUYỆT ĐỐI KHÔNG trừ điểm chỉ vì học sinh làm khác cách của barem!
+3. PHÂN BIỆT RÕ: SAI BẢN CHẤT vs SƠ SUẤT TRÌNH BÀY NHỎ:
+   • Nếu chỉ là viết tắt thông thường hoặc thiếu câu chữ phụ nhưng ý hiểu đúng và bước toán logic $\rightarrow$ linh hoạt ghi nhận tư duy, trừ nhẹ có chừng mực, không dập tắt động lực học tập.
+4. LỜI NHẬN XÉT SƯ PHẠM ẤM ÁP & TRUYỀN CẢM HỨNG:
+   • Động viên nỗ lực, chỉ ra điểm sáng tạo và hướng tư duy tối ưu để học sinh ngày càng tiến bộ.`;
+  }
+
+  return `Bạn là một Giáo viên Toán học cao cấp tại Việt Nam, đóng vai trò trong quy trình Chấm Bài Độc Lập Bằng Claude AI.
+Tên hoặc danh xưng của bạn trong bài chấm là: "${teacherName}", xưng hô giữa "${teacherAddress}".
+
+${passHeader}
+BẠN ĐANG THỰC HIỆN LẦN CHẤM SỐ ${pass}/3 CHO BÀI THI TỰ LUẬN MÔN TOÁN CỦA HỌC SINH: "${studentName}".
+
+=== ĐỀ BÀI VÀ THANG ĐIỂM (RUBRIC) CHUẨN ===
+Tiêu đề/Bài toán: ${rubric.title}
+Nội dung đề bài và đáp án:
+${rubric.problemStatement}
+
+Tổng điểm tối đa: ${rubric.totalPoints} điểm.
+
+Các tiêu chí chấm cụ thể theo thang điểm:
+${rubric.criteria
+  .map(
+    (c, idx) =>
+      `${idx + 1}. [${c.id}] ${c.name} (${c.points} điểm): ${c.description}`
+  )
+  .join('\n')}
+
+=== THÔNG TIN BÀI LÀM CỦA HỌC SINH ===
+${
+  extractedSubmissionText
+    ? `BẢN PHIÊN ÂM BÀI LÀM ĐÃ ĐƯỢC CHUẨN HÓA LATEX:
+${extractedSubmissionText}
+
+(Lưu ý: Hãy đọc kỹ từng ký tự, công thức và bước làm thực tế của học sinh. Đối chiếu thêm với hình ảnh gốc viết tay nếu có đính kèm để xác nhận nét mực thực tế).`
+    : `(Bài làm dạng ảnh chụp viết tay đính kèm. Hãy đọc kỹ từng nét chữ, từng dấu toán học và từng phép biến đổi của học sinh).`
+}
+
+${buildStrictnessBlock(strictness)}
+
+${passFocusInstructions}
+
+═══════════════════════════════════════════════════════════
+YÊU CẦU QUAN TRỌNG VỀ GIỌNG VĂN CHẤM BÀI (TUÂN THỦ TUYỆT ĐỐI)
+═══════════════════════════════════════════════════════════
+• NÓI THẲNG Ý — KHÔNG VÒNG VO — KHÔNG RÀO ĐÓN:
+  - TUYỆT ĐỐI KHÔNG mở đầu dài dòng, rào đón xã giao.
+  - ĐI THẲNG VÀO NỘI DUNG TOÁN HỌC: Đạt ý gì, sai chỗ nào, lý do cho/trừ điểm.
+  - Văn phong ngắn gọn, trực diện, dứt khoát như chữ phê bút đỏ của giáo viên trên giấy thi.
+
+• GẠCH ĐÚNG Ý / LỖI SAI CỤ THỂ:
+  - Chỉ đích danh vị trí sai, ký hiệu sai, phép tính nhầm. Không nhận xét chung chung.
+
+CẤU TRÚC KẾT QUẢ CHẤM:
+1. generalComment: ĐÚNG 2 ĐẾN 3 GẠCH ĐẦU DÒNG ngắn gọn, nói thẳng ý (hướng làm, độ chính xác, trình bày). Không viết đoạn văn dài.
+2. criteriaBreakdown[].reason: Ghi thẳng 'Làm đúng: [...] (+...đ)' hoặc 'Lỗi sai: [chỉ đích danh lỗi] (-...đ)'. Tối đa 1-2 câu ngắn.
+3. strengths / weaknesses: Mỗi phần 1-2 gạch ngắn gọn, chỉ thẳng điểm làm tốt hoặc lỗi sai cụ thể.
+4. correctionGuide: 1-2 câu ngắn gọn chỉ thẳng cách sửa đúng.
+5. teacherComment: Lời phê trực diện, chân thật, tối đa 1-2 câu gửi em ${studentName}, xưng hô ${teacherAddress}, không rào đón sáo rỗng.
+
+═══════════════════════════════════════════════════════════
+KẾT QUẢ CHẤM — TRẢ VỀ JSON DUY NHẤT
+═══════════════════════════════════════════════════════════
+LƯU Ý ĐỊNH DẠNG:
+• Tuyệt đối KHÔNG ghi chú bằng comment // hoặc /* */ trong JSON.
+• Dùng dấu nháy đơn '...' cho các trích dẫn chữ hoặc công thức trong câu nhận xét.
+
+{
+  "score": 0.75,
+  "maxScore": ${rubric.totalPoints},
+  "generalComment": "• [Gạch 1: Hướng làm đúng/sai - nói thẳng ý]\\n• [Gạch 2: Biến đổi & kết quả - chỉ rõ chỗ sai nếu có]\\n• [Gạch 3 nếu cần: Trình bày sạch đẹp hay ẩu]",
+  "criteriaBreakdown": [
+    {
+      "criterionId": "id tiêu chí trong rubric",
+      "criterionName": "Tên tiêu chí",
+      "maxPoints": 0.25,
+      "awardedPoints": 0.25,
+      "isCorrect": "full",
+      "reason": "Làm đúng: [ghi bước đúng] (+0.25đ) hoặc Lỗi sai: [chỉ đích danh chỗ sai] (-0.25đ). Nói thẳng ý, không vòng vo."
+    }
+  ],
+  "strengths": ["Ưu điểm 1 (ngắn gọn)...", "Ưu điểm 2..."],
+  "weaknesses": ["Lỗi sai cụ thể 1 (chỉ rõ vị trí, ký hiệu sai)...", "Lỗi sai cụ thể 2..."],
+  "correctionGuide": "Chỉ thẳng cách sửa đúng, ngắn gọn 1-2 câu...",
+  "teacherComment": "Lời phê trực diện, chân thật, tối đa 1-2 câu của ${teacherName} gửi em ${studentName}."
+}
+`;
+}
+
+/**
+ * Prompt to synthesize the 3 Claude evaluation passes into the definitive, most accurate final result
+ */
+export function buildClaudeSynthesisPrompt(
+  rubric: RubricData,
+  studentName: string,
+  settings: TeacherSettings,
+  passResults: { passNumber: number; perspective: string; result: any }[],
+  extractedSubmissionText?: string
+): string {
+  const teacherRole = settings.role === 'cô' ? 'Cô' : 'Thầy';
+  const teacherAddress = settings.role === 'cô' ? 'cô và em' : 'thầy và em';
+  const teacherName = settings.teacherName ? `${teacherRole} ${settings.teacherName}` : teacherRole;
+
+  const passesText = passResults
+    .map(
+      (p) => `\
+=== BẢN ĐÁNH GIÁ LẦN ${p.passNumber} (${p.perspective}) ===
+- Tổng điểm đề xuất: ${p.result.score}/${p.result.maxScore}đ
+- Nhận xét chung: ${p.result.generalComment || ''}
+- Chi tiết từng tiêu chí:
+${(p.result.criteriaBreakdown || [])
+  .map(
+    (c: any) =>
+      `  + [${c.criterionId}] ${c.criterionName}: ${c.awardedPoints}/${c.maxPoints}đ (${c.isCorrect}) -> Lý do: ${c.reason}`
+  )
+  .join('\n')}
+- Ưu điểm: ${(p.result.strengths || []).join(' | ')}
+- Nhược điểm: ${(p.result.weaknesses || []).join(' | ')}
+- Hướng dẫn sửa: ${p.result.correctionGuide || ''}
+- Lời phê: ${p.result.teacherComment || ''}
+`
+    )
+    .join('\n');
+
+  return `Bạn là Chủ Tịch Hội Đồng Chấm Thi Môn Toán (Supreme Arbitrator & Chief Examiner).
+Tên hoặc danh xưng của bạn trong bài chấm là: "${teacherName}", xưng hô giữa "${teacherAddress}".
+
+NHIỆM VỤ CỦA BẠN:
+Hệ thống vừa hoàn thành 3 LƯỢT CHẤM ĐỘC LẬP bằng Claude AI theo 3 góc nhìn chuyên môn:
+1. Lần 1: Giám khảo Chấm thi Chuẩn mực theo Barem & Tiến trình
+2. Lần 2: Giám khảo Phản biện Sắc sảo, khó tính & Soi lỗi tiềm ẩn
+3. Lần 3: Chuyên gia Sư phạm, Bản chất Toán học & Cách giải khác
+
+Nhiệm vụ của bạn là tổng hợp 3 kết quả trên, đối chiếu trực tiếp với Đề bài, Rubric chuẩn và Bài làm thực tế của học sinh "${studentName}" để đưa ra KẾT QUẢ CUỐI CÙNG CHÍNH XÁC VÀ CÔNG BẰNG NHẤT.
+
+=== ĐỀ BÀI VÀ THANG ĐIỂM (RUBRIC) CHUẨN ===
+Tiêu đề/Bài toán: ${rubric.title}
+Nội dung đề bài và đáp án:
+${rubric.problemStatement}
+
+Tổng điểm tối đa: ${rubric.totalPoints} điểm.
+
+Các tiêu chí chuẩn:
+${rubric.criteria
+  .map(
+    (c, idx) =>
+      `${idx + 1}. [${c.id}] ${c.name} (${c.points} điểm): ${c.description}`
+  )
+  .join('\n')}
+
+=== BÀI LÀM CỦA HỌC SINH ===
+${
+  extractedSubmissionText
+    ? `BẢN PHIÊN ÂM BÀI LÀM (LATEX):
+${extractedSubmissionText}`
+    : `(Bài làm dạng ảnh scan viết tay đính kèm)`
+}
+
+═══════════════════════════════════════════════════════════
+KẾT QUẢ TỪ 3 LẦN CHẤM ĐỘC LẬP
+═══════════════════════════════════════════════════════════
+${passesText}
+
+═══════════════════════════════════════════════════════════
+QUY TẮC ĐỐI CHIẾU & CHỐT ĐIỂM CỦA HỘI ĐỒNG (TỐI QUAN TRỌNG)
+═══════════════════════════════════════════════════════════
+1. ĐỐI CHIẾU TỪNG TIÊU CHÍ VÀ XỬ LÝ BẤT ĐỒNG:
+   • Nếu cả 3 lần chấm đồng thuận điểm số: Chốt ngay mức điểm đó.
+   • Nếu Giám khảo 2 (Phản biện) trừ điểm vì phát hiện lỗi sai mà Giám khảo 1 và 3 bỏ qua:
+     + Hãy kiểm tra lại bài làm học sinh xem lỗi đó có thật không (ví dụ: viết $x \\ge 0$ thay vì $x > 0$, biến đổi bước trước sai nhưng bước sau vô tình ra kết quả đúng, quên loại nghiệm ngoại lai).
+     + Nếu lỗi đó CÓ THẬT và vi phạm toán học $\\rightarrow$ CÔNG NHẬN LỖI SAI CỦA GIÁM KHẢO 2, trừ điểm đúng mức theo barem để bảo đảm tính chuẩn xác!
+     + Nếu Giám khảo 2 bắt bẻ quá mức đối với một lỗi trình bày phụ không nằm trong rubric $\rightarrow$ Bảo vệ điểm cho học sinh theo Giám khảo 1 và 3.
+   • Nếu Giám khảo 3 (Sư phạm) cho điểm vì phát hiện học sinh làm đúng theo cách giải khác hợp lệ ngoài barem $\rightarrow$ CÔNG NHẬN SỰ ĐÚNG ĐẮN CỦA HỌC SINH, cho điểm xứng đáng, không trừ điểm oan!
+2. CHỐT ĐIỂM SỐ CUỐI CÙNG (FINAL SCORE):
+   • Điểm của từng tiêu chí phải là số thực hợp lý (bội số của 0.25 hoặc 0.1 tùy rubric).
+   • Tổng điểm cuối cùng "score" = tổng chính xác điểm các tiêu chí trong criteriaBreakdown.
+3. TỔNG HỢP BẢN NHẬN XÉT HOÀN CHỈNH (TRỰC DIỆN, KHÔNG VÒNG VO RÀO ĐÓN):
+   • generalComment: ĐÚNG 2 ĐẾN 3 GẠCH ĐẦU DÒNG ngắn gọn, nói thẳng ý (hướng làm, độ chính xác, trình bày). Tuyệt đối không rào đón.
+   • criteriaBreakdown[].reason: Nói thẳng lý do, gạch đúng bước/lỗi sai: 'Làm đúng: [...] (+...đ)' hoặc 'Lỗi sai: [...] (-...đ)'. Tối đa 1-2 câu ngắn.
+   • strengths / weaknesses: Mỗi phần 1-2 gạch ngắn gọn, chỉ thẳng điểm làm tốt hoặc lỗi sai cụ thể.
+   • correctionGuide: Chỉ thẳng cách sửa đúng, ngắn gọn 1-2 câu.
+   • teacherComment: Lời phê trực diện, chân thật, tối đa 1-2 câu gửi em ${studentName}, xưng hô ${teacherAddress}, không sáo rỗng.
+   • synthesisSummary: Tóm tắt 1 câu dứt khoát về cách hội đồng đã chốt điểm số cuối cùng.
+
+═══════════════════════════════════════════════════════════
+TRẢ VỀ JSON DUY NHẤT (KHÔNG CÓ CHỮ NGOÀI JSON)
+═══════════════════════════════════════════════════════════
+LƯU Ý ĐỊNH DẠNG:
+• Tuyệt đối KHÔNG ghi chú bằng comment // hoặc /* */ trong JSON.
+• Dùng dấu nháy đơn '...' cho các trích dẫn chữ hoặc công thức trong nhận xét.
+
+{
+  "score": 0.75,
+  "maxScore": ${rubric.totalPoints},
+  "synthesisSummary": "Hội đồng đối chiếu 3 lượt chấm, chốt điểm tối ưu theo barem.",
+  "generalComment": "• [Gạch 1: Hướng làm đúng/sai - nói thẳng ý]\\n• [Gạch 2: Biến đổi & kết quả - chỉ rõ chỗ sai nếu có]\\n• [Gạch 3 nếu cần: Trình bày sạch đẹp hay ẩu]",
+  "criteriaBreakdown": [
+    {
+      "criterionId": "id tiêu chí",
+      "criterionName": "Tên tiêu chí",
+      "maxPoints": 0.25,
+      "awardedPoints": 0.25,
+      "isCorrect": "full",
+      "reason": "Làm đúng: [ghi bước đúng] (+0.25đ) hoặc Lỗi sai: [chỉ đích danh chỗ sai] (-0.25đ). Nói thẳng ý, không vòng vo."
+    }
+  ],
+  "strengths": ["Ưu điểm 1 (ngắn gọn)...", "Ưu điểm 2..."],
+  "weaknesses": ["Lỗi sai cụ thể 1 (chỉ rõ vị trí, ký hiệu sai)...", "Lỗi sai cụ thể 2..."],
+  "correctionGuide": "Chỉ thẳng cách sửa đúng, ngắn gọn 1-2 câu...",
+  "teacherComment": "Lời phê trực diện, chân thật, tối đa 1-2 câu của ${teacherName} gửi em ${studentName}."
+}
+`;
+}
+

@@ -162,160 +162,224 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
   };
 
   // Grade a single submission directly
-  // Grade a single submission directly
+  // Grade a single submission directly (Tự động thử lại tối đa 3 lần nếu gặp lỗi, lỗi 3 lần thì dừng và báo lỗi)
   const gradeSingleSubmission = async (sub: StudentSubmission) => {
     setActiveSubId(sub.id);
-    const isTriple = (settings.gradingMode || 'single') === 'triple_consensus';
+    const mode = settings.gradingMode || 'claude_triple_pass';
+    const isTriple = mode === 'triple_consensus';
+    const isClaudeTriple = mode === 'claude_triple_pass';
     const hasImages = sub.images && sub.images.length > 0;
-    const needsOcr = isTriple && hasImages && (!sub.extractedText || !sub.ocrComparison) && settings.autoOcrBeforeGrading !== false;
+    const needsOcr = (isTriple || isClaudeTriple) && hasImages && (!sub.extractedText || !sub.ocrComparison) && settings.autoOcrBeforeGrading !== false;
 
-    onUpdateSubmissions((prev) =>
-      prev.map((s) =>
-        s.id === sub.id
-          ? {
-              ...s,
-              status: 'grading',
-              stepMessage: needsOcr
-                ? 'Bước 1/2: Đang đọc công thức 3 Model AI (Gemini, Claude, GPT-4o)...'
-                : isTriple
-                ? 'Đang chấm đồng thời 3 Model (Gemini, Claude, GPT-4o)...'
-                : settings.provider === 'claude'
-                ? `Đang chấm bằng ${settings.claudeModel || 'Claude Opus 5'}...`
-                : `Đang chấm bằng ${settings.provider}...`,
-              error: undefined,
-            }
-          : s
-      )
-    );
+    const baseMessage = needsOcr
+      ? 'Bước 1/2: Đang đọc công thức toán học qua AI OCR...'
+      : isClaudeTriple
+      ? 'Đang chấm 3 lần bằng Claude (Chuẩn barem + Soi lỗi + Sư phạm)...'
+      : isTriple
+      ? 'Đang chấm đồng thời 3 Model (Gemini, Claude, GPT-4o)...'
+      : settings.provider === 'claude'
+      ? `Đang chấm bằng ${settings.claudeModel || 'Claude Opus 5'}...`
+      : `Đang chấm bằng ${settings.provider}...`;
 
-    try {
-      const res = await fetch('/api/grade', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
-          ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
-          ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
-          ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
-          ...(settings.alibabacloudApiKey ? { 'x-alibabacloud-api-key': settings.alibabacloudApiKey } : {}),
-        },
-        body: JSON.stringify({
-          submission: sub,
-          rubric,
-          settings,
-        }),
-      });
+    const MAX_RETRIES = 3;
+    let lastError: any = null;
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi khi chấm bài');
-
-      // Update state reactively
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       onUpdateSubmissions((prev) =>
         prev.map((s) =>
           s.id === sub.id
             ? {
                 ...s,
-                status: 'done',
-                gradingResult: data.gradingResult,
-                extractedText: data.extractedText || s.extractedText,
-                ocrComparison: data.ocrComparison || s.ocrComparison,
-                stepMessage: undefined,
-                queuePosition: undefined,
+                status: 'grading',
+                stepMessage:
+                  attempt > 1
+                    ? `[Thử lại ${attempt}/${MAX_RETRIES}] ${baseMessage}`
+                    : baseMessage,
                 error: undefined,
               }
             : s
         )
       );
-      return true;
-    } catch (err: any) {
-      console.error(`Error grading ${sub.id}:`, err);
-      onUpdateSubmissions((prev) =>
-        prev.map((s) =>
-          s.id === sub.id
-            ? {
-                ...s,
-                status: 'error',
-                error: err.message || 'Lỗi không xác định',
-                stepMessage: undefined,
-                queuePosition: undefined,
-              }
-            : s
-        )
-      );
-      return false;
-    } finally {
-      setActiveSubId(null);
-    }
-  };
 
-  // Run OCR with 3 models on a single submission without immediate grading
-  const runOcrOnly = async (sub: StudentSubmission) => {
-    setActiveSubId(sub.id);
+      try {
+        const res = await fetch('/api/grade', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
+            ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
+            ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
+            ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
+            ...(settings.alibabacloudApiKey ? { 'x-alibabacloud-api-key': settings.alibabacloudApiKey } : {}),
+          },
+          body: JSON.stringify({
+            submission: sub,
+            rubric,
+            settings,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || `Lỗi HTTP ${res.status} từ máy chủ khi chấm bài`);
+        }
+
+        // Thành công: Cập nhật trạng thái 'done'
+        onUpdateSubmissions((prev) =>
+          prev.map((s) =>
+            s.id === sub.id
+              ? {
+                  ...s,
+                  status: 'done',
+                  gradingResult: data.gradingResult,
+                  extractedText: data.extractedText || s.extractedText,
+                  ocrComparison: data.ocrComparison || s.ocrComparison,
+                  stepMessage: undefined,
+                  queuePosition: undefined,
+                  error: undefined,
+                }
+              : s
+          )
+        );
+        setActiveSubId(null);
+        return true;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[Chấm bài ${sub.studentName}] Lần ${attempt}/${MAX_RETRIES} gặp lỗi:`, err.message || err);
+
+        // Nếu chưa đến 3 lần lỗi thì chuẩn bị thử lại
+        if (attempt < MAX_RETRIES) {
+          const delayMs = attempt * 1500;
+          onUpdateSubmissions((prev) =>
+            prev.map((s) =>
+              s.id === sub.id
+                ? {
+                    ...s,
+                    stepMessage: `Gặp sự cố (${err.message || 'Lỗi kết nối'}). Đang thử lại (Lần ${attempt + 1}/${MAX_RETRIES})...`,
+                  }
+                : s
+            )
+          );
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+      }
+    }
+
+    // Sau 3 lần lỗi thì dừng và báo lỗi chi tiết
+    console.error(`[Chấm bài thất bại] Đã thử 3 lần đều gặp lỗi bài của ${sub.studentName}:`, lastError);
+    const finalErrorMessage = `Đã thử lại 3 lần nhưng đều thất bại (${lastError?.message || 'Lỗi không xác định'})`;
+
     onUpdateSubmissions((prev) =>
       prev.map((s) =>
         s.id === sub.id
           ? {
               ...s,
-              status: 'ocr',
-              stepMessage: 'Đang đọc công thức bằng 3 Model AI (Gemini, Claude, GPT-4o)...',
-              error: undefined,
+              status: 'error',
+              error: finalErrorMessage,
+              stepMessage: undefined,
+              queuePosition: undefined,
             }
           : s
       )
     );
+    setActiveSubId(null);
+    return false;
+  };
 
-    try {
-      const res = await fetch('/api/ocr', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
-          ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
-          ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
-          ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
-          ...(settings.alibabacloudApiKey ? { 'x-alibabacloud-api-key': settings.alibabacloudApiKey } : {}),
-        },
-        body: JSON.stringify({
-          submission: sub,
-          settings,
-        }),
-      });
+  // Run OCR with 3 models on a single submission without immediate grading (Tự động thử lại tối đa 3 lần)
+  const runOcrOnly = async (sub: StudentSubmission) => {
+    setActiveSubId(sub.id);
+    const MAX_RETRIES = 3;
+    let lastError: any = null;
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi khi nhận diện công thức');
-
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       onUpdateSubmissions((prev) =>
         prev.map((s) =>
           s.id === sub.id
             ? {
                 ...s,
-                status: s.gradingResult ? 'done' : 'idle',
-                extractedText: data.consensusText,
-                ocrComparison: data.ocrComparison,
-                stepMessage: undefined,
+                status: 'ocr',
+                stepMessage:
+                  attempt > 1
+                    ? `[Thử lại ${attempt}/${MAX_RETRIES}] Đang đọc công thức bằng AI OCR...`
+                    : 'Đang đọc công thức bằng 3 Model AI (Gemini, Claude, GPT-4o)...',
+                error: undefined,
               }
             : s
         )
       );
-      return true;
-    } catch (err: any) {
-      console.error(`Error running OCR on ${sub.id}:`, err);
-      onUpdateSubmissions((prev) =>
-        prev.map((s) =>
-          s.id === sub.id
-            ? {
-                ...s,
-                status: 'error',
-                error: err.message || 'Lỗi nhận diện công thức',
-                stepMessage: undefined,
-              }
-            : s
-        )
-      );
-      return false;
-    } finally {
-      setActiveSubId(null);
+
+      try {
+        const res = await fetch('/api/ocr', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
+            ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
+            ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
+            ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
+            ...(settings.alibabacloudApiKey ? { 'x-alibabacloud-api-key': settings.alibabacloudApiKey } : {}),
+          },
+          body: JSON.stringify({
+            submission: sub,
+            settings,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Lỗi khi nhận diện công thức');
+
+        onUpdateSubmissions((prev) =>
+          prev.map((s) =>
+            s.id === sub.id
+              ? {
+                  ...s,
+                  status: s.gradingResult ? 'done' : 'idle',
+                  extractedText: data.consensusText,
+                  ocrComparison: data.ocrComparison,
+                  stepMessage: undefined,
+                }
+              : s
+          )
+        );
+        setActiveSubId(null);
+        return true;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[OCR ${sub.studentName}] Lần ${attempt}/${MAX_RETRIES} gặp lỗi:`, err.message || err);
+
+        if (attempt < MAX_RETRIES) {
+          const delayMs = attempt * 1500;
+          onUpdateSubmissions((prev) =>
+            prev.map((s) =>
+              s.id === sub.id
+                ? {
+                    ...s,
+                    stepMessage: `Lỗi đọc công thức: ${err.message || 'Lỗi API'}. Đang thử lại (${attempt + 1}/${MAX_RETRIES})...`,
+                  }
+                : s
+            )
+          );
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+      }
     }
+
+    console.error(`[OCR thất bại] Đã thử 3 lần trên bài của ${sub.studentName}:`, lastError);
+    onUpdateSubmissions((prev) =>
+      prev.map((s) =>
+        s.id === sub.id
+          ? {
+              ...s,
+              status: 'error',
+              error: `Lỗi nhận diện công thức sau 3 lần thử: ${lastError?.message || 'Lỗi không xác định'}`,
+              stepMessage: undefined,
+            }
+          : s
+      )
+    );
+    setActiveSubId(null);
+    return false;
   };
 
   // Start sequential queue processing
@@ -486,7 +550,9 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
   const pendingCount = displaySubmissions.filter(
     (s) => s.status === 'idle' || s.status === 'error' || s.status === 'queued'
   ).length;
-  const isTripleMode = (settings.gradingMode || 'single') === 'triple_consensus';
+  const mode = settings.gradingMode || 'claude_triple_pass';
+  const isTripleMode = mode === 'triple_consensus';
+  const isClaudeTripleMode = mode === 'claude_triple_pass';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -517,8 +583,10 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
               Hỗ trợ nạp cùng lúc nhiều bài làm (.docx hoặc ảnh viết tay). Hệ thống dùng{' '}
-              <strong style={{ color: '#38bdf8' }}>
-                {isTripleMode
+              <strong style={{ color: isClaudeTripleMode ? '#f59e0b' : '#38bdf8' }}>
+                {isClaudeTripleMode
+                  ? 'Chế độ Chấm 3 Lần Bằng Claude (Tổng hợp kết quả tối ưu nhất)'
+                  : isTripleMode
                   ? 'Bộ 3 Model AI (Gemini + Claude + GPT-4o) đối chiếu kết quả'
                   : settings.provider === 'claude'
                   ? `Mô hình ${settings.claudeModel || 'Claude Opus 5'}`
@@ -940,47 +1008,65 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
 
                         {/* Consensus Badge */}
                         {consensus ? (
-                          consensus.status === 'single_model' ? (
-                            <span
-                              className="badge badge-amber"
-                              title={consensus.summary}
-                              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
-                            >
-                              <AlertCircle size={12} /> Chỉ 1 Model ({consensus.evaluations[0]?.provider?.toUpperCase() || 'AI'})
-                            </span>
-                          ) : consensus.status === 'unanimous' ? (
-                            <span
-                              className="badge badge-emerald"
-                              title={consensus.summary}
-                              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
-                            >
-                              <CheckCircle2 size={12} /> Đồng thuận 3/3 Model
-                            </span>
-                          ) : consensus.status === 'majority' ? (
-                            <span
-                              className="badge badge-amber"
-                              title={consensus.summary}
-                              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
-                            >
-                              <Layers size={12} /> Đồng thuận {consensus.evaluations.length >= 3 ? 'đa số (2/3)' : '2 Model'} (Lệch {consensus.scoreDifference}đ)
-                            </span>
-                          ) : consensus.status === 'resolved_after_retry' ? (
-                            <span
-                              className="badge badge-indigo"
-                              title={consensus.summary}
-                              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
-                            >
-                              <RefreshCw size={12} /> Đã chấm lại {consensus.regradeCount} lần
-                            </span>
-                          ) : (
-                            <span
-                              className="badge badge-rose"
-                              title={consensus.summary}
-                              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
-                            >
-                              <AlertCircle size={12} /> Chênh lệch {consensus.scoreDifference}đ
-                            </span>
-                          )
+                          (() => {
+                            const isClaudeTriple =
+                              consensus.evaluations.length > 0 &&
+                              consensus.evaluations.every((e) => e.provider === 'claude');
+
+                            if (consensus.status === 'single_model') {
+                              return (
+                                <span
+                                  className="badge badge-amber"
+                                  title={consensus.summary}
+                                  style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
+                                >
+                                  <AlertCircle size={12} /> {isClaudeTriple ? 'Chỉ 1 lượt Claude' : `Chỉ 1 Model (${consensus.evaluations[0]?.provider?.toUpperCase() || 'AI'})`}
+                                </span>
+                              );
+                            }
+                            if (consensus.status === 'unanimous') {
+                              return (
+                                <span
+                                  className="badge badge-emerald"
+                                  title={consensus.summary}
+                                  style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
+                                >
+                                  <CheckCircle2 size={12} /> {isClaudeTriple ? 'Đồng thuận 3 lần Claude' : 'Đồng thuận 3/3 Model'}
+                                </span>
+                              );
+                            }
+                            if (consensus.status === 'majority') {
+                              return (
+                                <span
+                                  className="badge badge-amber"
+                                  title={consensus.summary}
+                                  style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
+                                >
+                                  <Layers size={12} /> {isClaudeTriple ? 'Đồng thuận đa số (Claude)' : `Đồng thuận ${consensus.evaluations.length >= 3 ? 'đa số (2/3)' : '2 Model'}`} (Lệch {consensus.scoreDifference}đ)
+                                </span>
+                              );
+                            }
+                            if (consensus.status === 'resolved_after_retry') {
+                              return (
+                                <span
+                                  className="badge badge-indigo"
+                                  title={consensus.summary}
+                                  style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
+                                >
+                                  <RefreshCw size={12} /> {isClaudeTriple ? 'Hội đồng Claude tổng hợp' : `Đã chấm lại ${consensus.regradeCount} lần`}
+                                </span>
+                              );
+                            }
+                            return (
+                              <span
+                                className="badge badge-rose"
+                                title={consensus.summary}
+                                style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
+                              >
+                                <AlertCircle size={12} /> {isClaudeTriple ? `Claude lệch ${consensus.scoreDifference}đ (Đã phân xử)` : `Chênh lệch ${consensus.scoreDifference}đ`}
+                              </span>
+                            );
+                          })()
                         ) : (
                           <span className="badge badge-emerald">
                             <CheckCircle2 size={12} /> Đã chấm xong

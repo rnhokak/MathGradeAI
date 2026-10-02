@@ -56,7 +56,7 @@ const DEFAULT_SETTINGS: TeacherSettings = {
   teacherName: '',
   strictness: 'strict',
   provider: 'claude',
-  gradingMode: 'single',
+  gradingMode: 'claude_triple_pass',
   autoOcrBeforeGrading: false,
   queueDelayMs: 2000,
   maxRegradeRetries: 2,
@@ -115,10 +115,17 @@ export default function Home() {
           claudeBaseUrl = 'https://apikey.pimath.id.vn/v1';
         }
 
+        // Mặc định luôn là claude_triple_pass nếu người dùng chưa chủ động đổi sang chế độ khác
+        let gradingMode = parsed.gradingMode;
+        if (!gradingMode || !parsed._gradingModeExplicitlySet) {
+          gradingMode = 'claude_triple_pass';
+        }
+
         setSettings({
           ...DEFAULT_SETTINGS,
           ...parsed,
-          gradingMode: parsed.gradingMode || 'single',
+          gradingMode,
+          _gradingModeExplicitlySet: parsed._gradingModeExplicitlySet,
           autoOcrBeforeGrading: parsed.autoOcrBeforeGrading ?? false,
           queueDelayMs: parsed.queueDelayMs ?? 2000,
           maxRegradeRetries: parsed.maxRegradeRetries ?? 2,
@@ -145,9 +152,13 @@ export default function Home() {
 
   // Save settings
   const handleSaveSettings = (newSettings: TeacherSettings) => {
-    setSettings(newSettings);
+    const toSave: TeacherSettings = {
+      ...newSettings,
+      _gradingModeExplicitlySet: true,
+    };
+    setSettings(toSave);
     try {
-      localStorage.setItem('chambai_teacher_settings', JSON.stringify(newSettings));
+      localStorage.setItem('chambai_teacher_settings', JSON.stringify(toSave));
       showToast('Đã lưu cấu hình giáo viên thành công!');
     } catch (e) {
       console.warn('Could not save settings to localStorage');
