@@ -61,22 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
               <h1 style={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
                 MathGrade <span className="text-gradient">AI</span>
               </h1>
-              {(settings.gradingMode || 'claude_triple_pass') === 'claude_triple_pass' ? (
-                <span
-                  className="badge badge-amber"
-                  style={{
-                    cursor: 'pointer',
-                    background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.25))',
-                    border: '1px solid #f59e0b',
-                    color: '#fef3c7',
-                    fontWeight: 600,
-                  }}
-                  onClick={onOpenSettings}
-                  title="Chế độ mặc định: Chấm 3 lần bằng Claude (Chuẩn barem + Soi lỗi + Sư phạm) & Tổng hợp tối ưu"
-                >
-                  <Bot size={11} /> Claude 3 Lần (Tối Ưu ⭐)
-                </span>
-              ) : settings.gradingMode === 'triple_consensus' ? (
+              {settings.gradingMode === 'triple_consensus' ? (
                 <span
                   className="badge badge-indigo"
                   style={{
@@ -86,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
                     color: '#e0e7ff',
                   }}
                   onClick={onOpenSettings}
-                  title="Chế độ chấm đa model đối chiếu"
+                  title="Chế độ chấm đa model đối chiếu (Gemini + Claude + GPT-4o)"
                 >
                   <Layers size={11} /> Đa Model Đối Chiếu (3 AI)
                 </span>
@@ -100,9 +85,9 @@ export const Header: React.FC<HeaderProps> = ({
                     border: '1px solid #ea580c',
                   }}
                   onClick={onOpenSettings}
-                  title="Bấm để cấu hình Alibaba Cloud (Model Studio) API"
+                  title={`Alibaba Cloud Model Studio: ${settings.alibabacloudModel || 'qwen-plus-character'} • ${(settings.modelPasses?.alibabacloud ?? 3) === 3 ? 'Chấm 3 lần (Triple-Pass)' : 'Chấm 1 lần'}`}
                 >
-                  <Cpu size={11} /> {settings.alibabacloudModel || 'Qwen Plus'}
+                  <Cpu size={11} /> Qwen Alibaba {(settings.modelPasses?.alibabacloud ?? 3) === 3 ? '3 Lần (⭐)' : '1 Lần'}
                 </span>
               ) : settings.provider === 'openrouter' ? (
                 <span
@@ -114,36 +99,43 @@ export const Header: React.FC<HeaderProps> = ({
                     border: '1px solid #a855f7',
                   }}
                   onClick={onOpenSettings}
-                  title="Bấm để cấu hình OpenRouter (Qwen) API"
+                  title={`OpenRouter: ${settings.openrouterModel || 'qwen/qwen3.8-flash'} • ${(settings.modelPasses?.openrouter ?? 3) === 3 ? 'Chấm 3 lần (Triple-Pass)' : 'Chấm 1 lần'}`}
                 >
-                  <Cpu size={11} /> {settings.openrouterModel || 'Qwen 3.8'}
+                  <Cpu size={11} /> Qwen OpenRouter {(settings.modelPasses?.openrouter ?? 3) === 3 ? '3 Lần (⭐)' : '1 Lần'}
                 </span>
               ) : settings.provider === 'claude' ? (
                 <span
                   className="badge badge-amber"
-                  style={{ cursor: 'pointer' }}
+                  style={{
+                    cursor: 'pointer',
+                    background: (settings.modelPasses?.claude ?? 3) === 3
+                      ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.25))'
+                      : 'rgba(245, 158, 11, 0.15)',
+                    border: '1px solid #f59e0b',
+                    color: '#fef3c7',
+                  }}
                   onClick={onOpenSettings}
-                  title="Bấm để cấu hình Claude API"
+                  title={`Claude API: ${settings.claudeModel || 'Claude Opus 5'} • ${(settings.modelPasses?.claude ?? 3) === 3 ? 'Chấm 3 lần (Triple-Pass)' : 'Chấm 1 lần'}`}
                 >
-                  <Bot size={11} /> {settings.claudeModel || 'Claude Opus 5'}
+                  <Bot size={11} /> Claude {(settings.modelPasses?.claude ?? 3) === 3 ? '3 Lần (⭐)' : '1 Lần'}
                 </span>
               ) : settings.provider === 'openai' ? (
                 <span
                   className="badge badge-emerald"
                   style={{ cursor: 'pointer' }}
                   onClick={onOpenSettings}
-                  title="Bấm để cấu hình OpenAI API"
+                  title={`OpenAI: ${settings.openaiModel || 'GPT-4o'} • ${(settings.modelPasses?.openai ?? 3) === 3 ? 'Chấm 3 lần (Triple-Pass)' : 'Chấm 1 lần'}`}
                 >
-                  <Layers size={11} /> {settings.openaiModel || 'GPT-4o'}
+                  <Layers size={11} /> OpenAI {(settings.modelPasses?.openai ?? 3) === 3 ? '3 Lần (⭐)' : '1 Lần'}
                 </span>
               ) : (
                 <span
                   className="badge badge-indigo"
                   style={{ cursor: 'pointer' }}
                   onClick={onOpenSettings}
-                  title="Bấm để cấu hình Gemini API"
+                  title={`Gemini: ${settings.geminiModel || settings.model || 'Gemini 3.8'} • ${(settings.modelPasses?.gemini ?? 3) === 3 ? 'Chấm 3 lần (Triple-Pass)' : 'Chấm 1 lần'}`}
                 >
-                  <Sparkles size={11} /> {settings.geminiModel || settings.model || 'Gemini 3.8'}
+                  <Sparkles size={11} /> Gemini {(settings.modelPasses?.gemini ?? 3) === 3 ? '3 Lần (⭐)' : '1 Lần'}
                 </span>
               )}
             </div>

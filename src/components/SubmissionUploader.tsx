@@ -167,19 +167,27 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
     setActiveSubId(sub.id);
     const mode = settings.gradingMode || 'claude_triple_pass';
     const isTriple = mode === 'triple_consensus';
-    const isClaudeTriple = mode === 'claude_triple_pass';
+    const provider = settings.provider || 'claude';
+    const passes = settings.modelPasses?.[provider] ?? (mode === 'claude_triple_pass' || mode === 'triple_pass' ? 3 : 1);
     const hasImages = sub.images && sub.images.length > 0;
-    const needsOcr = (isTriple || isClaudeTriple) && hasImages && (!sub.extractedText || !sub.ocrComparison) && settings.autoOcrBeforeGrading !== false;
+    const needsOcr = hasImages && (!sub.extractedText || !sub.ocrComparison) && settings.autoOcrBeforeGrading !== false;
+
+    const providerDisplayNames: Record<string, string> = {
+      openrouter: `Qwen (${settings.openrouterModel || '3.8'})`,
+      alibabacloud: `Qwen (${settings.alibabacloudModel || 'Alibaba'})`,
+      claude: settings.claudeModel || 'Claude Opus 5',
+      openai: settings.openaiModel || 'GPT-4o',
+      gemini: settings.geminiModel || 'Gemini 3.8',
+    };
+    const activeModelName = providerDisplayNames[provider] || provider;
 
     const baseMessage = needsOcr
-      ? 'Bước 1/2: Đang đọc công thức toán học qua AI OCR...'
-      : isClaudeTriple
-      ? 'Đang chấm 3 lần bằng Claude (Chuẩn barem + Soi lỗi + Sư phạm)...'
+      ? 'Bước 1/2: Đang đọc công thức & chữ viết tay qua AI OCR...'
       : isTriple
       ? 'Đang chấm đồng thời 3 Model (Gemini, Claude, GPT-4o)...'
-      : settings.provider === 'claude'
-      ? `Đang chấm bằng ${settings.claudeModel || 'Claude Opus 5'}...`
-      : `Đang chấm bằng ${settings.provider}...`;
+      : passes === 3
+      ? `Đang chấm 3 lần bằng ${activeModelName} (Barem + Soi lỗi + Sư phạm)...`
+      : `Đang chấm nhanh bằng ${activeModelName}...`;
 
     const MAX_RETRIES = 3;
     let lastError: any = null;
@@ -552,7 +560,18 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
   ).length;
   const mode = settings.gradingMode || 'claude_triple_pass';
   const isTripleMode = mode === 'triple_consensus';
-  const isClaudeTripleMode = mode === 'claude_triple_pass';
+  const activeProvider = settings.provider || 'claude';
+  const activePasses = settings.modelPasses?.[activeProvider] ?? (mode === 'claude_triple_pass' || mode === 'triple_pass' ? 3 : 1);
+  const activeModelTitle =
+    activeProvider === 'openrouter'
+      ? `Qwen (${settings.openrouterModel || '3.8'})`
+      : activeProvider === 'alibabacloud'
+      ? `Qwen (${settings.alibabacloudModel || 'Alibaba'})`
+      : activeProvider === 'claude'
+      ? (settings.claudeModel || 'Claude Opus 5')
+      : activeProvider === 'openai'
+      ? (settings.openaiModel || 'GPT-4o')
+      : (settings.geminiModel || 'Gemini 3.8');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -583,14 +602,12 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
               Hỗ trợ nạp cùng lúc nhiều bài làm (.docx hoặc ảnh viết tay). Hệ thống dùng{' '}
-              <strong style={{ color: isClaudeTripleMode ? '#f59e0b' : '#38bdf8' }}>
-                {isClaudeTripleMode
-                  ? 'Chế độ Chấm 3 Lần Bằng Claude (Tổng hợp kết quả tối ưu nhất)'
-                  : isTripleMode
+              <strong style={{ color: isTripleMode ? '#818cf8' : activePasses === 3 ? '#f59e0b' : '#38bdf8' }}>
+                {isTripleMode
                   ? 'Bộ 3 Model AI (Gemini + Claude + GPT-4o) đối chiếu kết quả'
-                  : settings.provider === 'claude'
-                  ? `Mô hình ${settings.claudeModel || 'Claude Opus 5'}`
-                  : `Mô hình ${settings.provider.toUpperCase()}`}
+                  : activePasses === 3
+                  ? `Chế độ Chấm 3 Lần Bằng ${activeModelTitle} (Barem + Soi lỗi + Sư phạm & Hội đồng tổng hợp)`
+                  : `Mô hình ${activeModelTitle} (Chấm 1 lần nhanh)`}
               </strong>{' '}
               và hàng đợi tuần tự để chấm điểm chính xác nhất.
             </p>
@@ -623,15 +640,13 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 {/* AI Mode badge */}
                 <span
-                  className={`badge ${isTripleMode ? 'badge-indigo' : 'badge-amber'}`}
+                  className={`badge ${isTripleMode ? 'badge-indigo' : activePasses === 3 ? 'badge-amber' : 'badge-emerald'}`}
                   style={{ fontSize: '0.8rem', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
-                  <Sparkles size={13} color={isTripleMode ? '#818cf8' : '#fbbf24'} />
+                  <Sparkles size={13} color={isTripleMode ? '#818cf8' : activePasses === 3 ? '#fbbf24' : '#34d399'} />
                   {isTripleMode
                     ? '3 Model Đối Chiếu (Gemini + Claude + GPT-4o)'
-                    : settings.provider === 'claude'
-                    ? `1 Model: ${settings.claudeModel || 'Claude Opus 5'}`
-                    : `1 Model: ${settings.provider.toUpperCase()}`}
+                    : `${activeModelTitle} • ${activePasses === 3 ? 'Chấm 3 Lần (⭐)' : 'Chấm 1 Lần'}`}
                 </span>
 
                 {/* Start Queue button */}

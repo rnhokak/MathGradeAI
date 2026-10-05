@@ -4,6 +4,7 @@ import {
   gradeWithProvider,
   gradeWithThreeModelsAndConsensus,
   gradeWithClaudeTriplePass,
+  gradeWithProviderTriplePass,
   resolveClaudeEndpoint,
 } from '@/utils/aiGrading';
 
@@ -103,38 +104,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Mode 2: Claude Triple-Pass (Chấm 3 lần bằng Claude & tổng hợp kết quả chính xác nhất)
-    if (gradingMode === 'claude_triple_pass') {
-      if (!claudeKey) {
-        return NextResponse.json(
-          {
-            error:
-              'Chưa cấu hình Anthropic Claude API Key. Vui lòng bấm vào Cài Đặt (chọn tab Claude) để nhập API Key, hoặc khai báo ANTHROPIC_API_KEY trong file .env.local.',
-          },
-          { status: 400 }
-        );
-      }
-
-      const { gradingResult, consensusReport } = await gradeWithClaudeTriplePass(
-        submission,
-        rubric,
-        effectiveSettings,
-        claudeKey,
-        backupKeys.claude
-      );
-
-      return NextResponse.json({
-        success: true,
-        gradingResult,
-        consensusReport,
-        ocrComparison: gradingResult.ocrComparison || submission.ocrComparison,
-        extractedText: submission.extractedText,
-        mode: 'claude_triple_pass',
-      });
-    }
-
-    // Mode 3: Single model provider
-    const provider = effectiveSettings?.provider || 'claude';
+    // Mode 2 & 3: Single model provider (có thể cấu hình Chấm 1 lần hoặc Chấm 3 lần Triple-Pass)
+    const provider = effectiveSettings?.provider || (gradingMode === 'claude_triple_pass' ? 'claude' : 'claude');
     let apiKey = '';
     let backupApiKey: string | undefined = undefined;
 
@@ -200,6 +171,35 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Kiểm tra số lượt chấm cấu hình cho model này: 1 lần (dùng một lần) hay 3 lần (chấm 3 lần)
+    const passes =
+      effectiveSettings?.modelPasses?.[provider] ??
+      (gradingMode === 'single' ? 1 : 3);
+
+    if (passes === 3) {
+      console.log(`[API /grade] Chạy chế độ Chấm 3 Lần (Triple-Pass) với model: ${provider}`);
+      const { gradingResult, consensusReport } = await gradeWithProviderTriplePass(
+        provider,
+        submission,
+        rubric,
+        effectiveSettings,
+        apiKey,
+        backupApiKey
+      );
+
+      return NextResponse.json({
+        success: true,
+        gradingResult,
+        consensusReport,
+        ocrComparison: gradingResult.ocrComparison || submission.ocrComparison,
+        extractedText: submission.extractedText,
+        mode: `${provider}_triple_pass`,
+        modelUsed: consensusReport?.modelsUsed?.[0] || provider,
+      });
+    }
+
+    // Dùng 1 lần (Single-pass nhanh)
+    console.log(`[API /grade] Chạy chế độ Chấm 1 Lần Nhanh với model: ${provider}`);
     const { gradingResult, modelUsed } = await gradeWithProvider(
       submission,
       rubric,

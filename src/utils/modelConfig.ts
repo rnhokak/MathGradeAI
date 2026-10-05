@@ -117,10 +117,17 @@ export const SUPPORTED_OPENAI_MODELS: ModelOption[] = [
 
 export const SUPPORTED_OPENROUTER_MODELS: ModelOption[] = [
   {
+    id: 'qwen/qwen3.8-flash',
+    name: 'Qwen 3.8 Flash',
+    description: 'Khuyên dùng - Siêu nhanh, hỗ trợ suy luận reasoning tokens chuyên sâu',
+    recommended: true,
+    badge: 'Mới nhất ⭐',
+    provider: 'openrouter',
+  },
+  {
     id: 'qwen/qwen3.8-27b:free',
     name: 'Qwen 3.8 27B (Free)',
-    description: 'Khuyên dùng - Miễn phí, Chain-of-Thought suy luận toán học xuất sắc',
-    recommended: true,
+    description: 'Miễn phí, Chain-of-Thought suy luận toán học xuất sắc',
     badge: 'Free',
     provider: 'openrouter',
   },

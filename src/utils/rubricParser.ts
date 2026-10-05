@@ -506,14 +506,14 @@ LƯU Ý:
 }
 
 /**
- * Parse rubric using OpenRouter (Qwen: qwen/qwen3.8-27b:free, qwen/qwen-2.5-72b-instruct, etc.)
+ * Parse rubric using OpenRouter (Qwen: qwen/qwen3.8-flash, qwen/qwen-2.5-72b-instruct, etc.)
  */
 export async function parseRubricWithOpenRouter(
   text: string,
   tables: string[][][],
   fileName?: string,
   apiKey?: string,
-  modelName: string = 'qwen/qwen3.8-27b:free',
+  modelName: string = 'qwen/qwen3.8-flash',
   baseUrl: string = 'https://openrouter.ai/api/v1'
 ): Promise<RubricData> {
   if (!apiKey) {

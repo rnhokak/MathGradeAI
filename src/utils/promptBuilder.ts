@@ -280,14 +280,16 @@ Cấu trúc JSON yêu cầu:
 }
 
 /**
- * Prompt for Claude Triple-Pass Grading (Pass 1: Official Rubric, Pass 2: Adversarial Audit, Pass 3: Pedagogical Insight)
+ * Generic Prompt for Triple-Pass Grading (Pass 1: Official Rubric, Pass 2: Adversarial Audit, Pass 3: Pedagogical Insight)
+ * Supports all AI models: Qwen, Claude, Gemini, OpenAI.
  */
-export function buildClaudeTriplePassPrompt(
+export function buildModelTriplePassPrompt(
   pass: 1 | 2 | 3,
   rubric: RubricData,
   studentName: string,
   settings: TeacherSettings,
-  extractedSubmissionText?: string
+  extractedSubmissionText?: string,
+  modelDisplayName: string = 'AI'
 ): string {
   const teacherRole = settings.role === 'cô' ? 'Cô' : 'Thầy';
   const teacherAddress = settings.role === 'cô' ? 'cô và em' : 'thầy và em';
@@ -346,7 +348,7 @@ Bạn đóng vai Chuyên gia Sư phạm thấu hiểu tư duy và bản chất t
    • Động viên nỗ lực, chỉ ra điểm sáng tạo và hướng tư duy tối ưu để học sinh ngày càng tiến bộ.`;
   }
 
-  return `Bạn là một Giáo viên Toán học cao cấp tại Việt Nam, đóng vai trò trong quy trình Chấm Bài Độc Lập Bằng Claude AI.
+  return `Bạn là một Giáo viên Toán học cao cấp tại Việt Nam, đóng vai trò trong quy trình Chấm Bài Độc Lập Bằng ${modelDisplayName}.
 Tên hoặc danh xưng của bạn trong bài chấm là: "${teacherName}", xưng hô giữa "${teacherAddress}".
 
 ${passHeader}
@@ -429,14 +431,36 @@ LƯU Ý ĐỊNH DẠNG:
 }
 
 /**
- * Prompt to synthesize the 3 Claude evaluation passes into the definitive, most accurate final result
+ * Backward compatibility wrapper for Claude Triple-Pass Prompt
  */
-export function buildClaudeSynthesisPrompt(
+export function buildClaudeTriplePassPrompt(
+  pass: 1 | 2 | 3,
+  rubric: RubricData,
+  studentName: string,
+  settings: TeacherSettings,
+  extractedSubmissionText?: string
+): string {
+  return buildModelTriplePassPrompt(
+    pass,
+    rubric,
+    studentName,
+    settings,
+    extractedSubmissionText,
+    'Claude AI'
+  );
+}
+
+/**
+ * Prompt to synthesize the 3 evaluation passes into the definitive, most accurate final result
+ * Supports all AI models: Qwen, Claude, Gemini, OpenAI.
+ */
+export function buildModelSynthesisPrompt(
   rubric: RubricData,
   studentName: string,
   settings: TeacherSettings,
   passResults: { passNumber: number; perspective: string; result: any }[],
-  extractedSubmissionText?: string
+  extractedSubmissionText?: string,
+  modelDisplayName: string = 'AI'
 ): string {
   const teacherRole = settings.role === 'cô' ? 'Cô' : 'Thầy';
   const teacherAddress = settings.role === 'cô' ? 'cô và em' : 'thầy và em';
@@ -467,7 +491,7 @@ ${(p.result.criteriaBreakdown || [])
 Tên hoặc danh xưng của bạn trong bài chấm là: "${teacherName}", xưng hô giữa "${teacherAddress}".
 
 NHIỆM VỤ CỦA BẠN:
-Hệ thống vừa hoàn thành 3 LƯỢT CHẤM ĐỘC LẬP bằng Claude AI theo 3 góc nhìn chuyên môn:
+Hệ thống vừa hoàn thành 3 LƯỢT CHẤM ĐỘC LẬP bằng ${modelDisplayName} theo 3 góc nhìn chuyên môn:
 1. Lần 1: Giám khảo Chấm thi Chuẩn mực theo Barem & Tiến trình
 2. Lần 2: Giám khảo Phản biện Sắc sảo, khó tính & Soi lỗi tiềm ẩn
 3. Lần 3: Chuyên gia Sư phạm, Bản chất Toán học & Cách giải khác
@@ -551,5 +575,25 @@ LƯU Ý ĐỊNH DẠNG:
   "teacherComment": "Lời phê trực diện, chân thật, tối đa 1-2 câu của ${teacherName} gửi em ${studentName}."
 }
 `;
+}
+
+/**
+ * Backward compatibility wrapper for Claude Synthesis Prompt
+ */
+export function buildClaudeSynthesisPrompt(
+  rubric: RubricData,
+  studentName: string,
+  settings: TeacherSettings,
+  passResults: { passNumber: number; perspective: string; result: any }[],
+  extractedSubmissionText?: string
+): string {
+  return buildModelSynthesisPrompt(
+    rubric,
+    studentName,
+    settings,
+    passResults,
+    extractedSubmissionText,
+    'Claude AI'
+  );
 }
 

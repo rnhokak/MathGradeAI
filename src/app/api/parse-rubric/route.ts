@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
         process.env.OPENROUTER_API_KEY ||
         ''
       ).trim();
-      const openrouterModel = req.headers.get('x-openrouter-model') || bodyModel || process.env.OPENROUTER_MODEL || 'qwen/qwen3.8-27b:free';
+      const openrouterModel = req.headers.get('x-openrouter-model') || bodyModel || process.env.OPENROUTER_MODEL || 'qwen/qwen3.8-flash';
       const openrouterBaseUrl = req.headers.get('x-openrouter-base-url') || bodyBaseUrl || process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
 
       if (openrouterKey) {

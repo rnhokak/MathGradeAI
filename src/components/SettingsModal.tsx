@@ -60,6 +60,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       settings.alibabacloudBaseUrl ||
       'https://ws-oxwvfx79avt7ebq3.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1',
     alibabacloudApiKey: settings.alibabacloudApiKey || '',
+    modelPasses: {
+      gemini: settings.modelPasses?.gemini ?? 3,
+      claude: settings.modelPasses?.claude ?? 3,
+      openai: settings.modelPasses?.openai ?? 3,
+      openrouter: settings.modelPasses?.openrouter ?? 3,
+      alibabacloud: settings.modelPasses?.alibabacloud ?? 3,
+    },
   });
 
   const [showGeminiKey, setShowGeminiKey] = useState(false);
@@ -107,6 +114,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   );
   const [isCustomOpenRouter, setIsCustomOpenRouter] = useState(
     ![
+      'qwen/qwen3.8-flash',
       'qwen/qwen3.8-27b:free',
       'qwen/qwen-2.5-vl-72b-instruct:free',
       'qwen/qwen-2.5-vl-72b-instruct',
@@ -126,6 +134,112 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       'qwen2.5-vl-72b-instruct',
     ].includes(current.alibabacloudModel || '')
   );
+
+  const renderPassSelector = (
+    providerKey: 'gemini' | 'claude' | 'openai' | 'openrouter' | 'alibabacloud',
+    modelLabel: string
+  ) => {
+    const currentPasses = current.modelPasses?.[providerKey] ?? 3;
+    return (
+      <div
+        style={{
+          marginTop: '6px',
+          padding: '12px 14px',
+          background: 'rgba(255, 255, 255, 0.03)',
+          borderRadius: 'var(--radius-sm)',
+          border: '1px solid var(--border-subtle)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <label
+            style={{
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              color: '#f8fafc',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              margin: 0,
+            }}
+          >
+            <Sparkles size={14} color="#818cf8" />
+            Số lần chấm của {modelLabel}:
+          </label>
+          <span
+            className={`badge ${currentPasses === 3 ? 'badge-amber' : 'badge-emerald'}`}
+            style={{ fontSize: '0.68rem', padding: '2px 8px' }}
+          >
+            {currentPasses === 3 ? '⭐ Chấm 3 lần (Triple-Pass)' : '⚡ Chấm 1 lần nhanh'}
+          </span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          <button
+            type="button"
+            onClick={() =>
+              setCurrent({
+                ...current,
+                modelPasses: {
+                  ...current.modelPasses,
+                  [providerKey]: 1,
+                },
+              })
+            }
+            className={`btn ${currentPasses === 1 ? 'btn-primary' : 'btn-secondary'}`}
+            style={{
+              padding: '8px 10px',
+              fontSize: '0.78rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              border: currentPasses === 1 ? '1px solid #06b6d4' : undefined,
+              background: currentPasses === 1 ? 'rgba(6, 182, 212, 0.25)' : undefined,
+            }}
+          >
+            {currentPasses === 1 && <Check size={14} />}
+            ⚡ Chấm 1 Lần Nhanh
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              setCurrent({
+                ...current,
+                modelPasses: {
+                  ...current.modelPasses,
+                  [providerKey]: 3,
+                },
+              })
+            }
+            className={`btn ${currentPasses === 3 ? 'btn-primary' : 'btn-secondary'}`}
+            style={{
+              padding: '8px 10px',
+              fontSize: '0.78rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              border: currentPasses === 3 ? '1px solid #f59e0b' : undefined,
+              background: currentPasses === 3 ? 'rgba(245, 158, 11, 0.25)' : undefined,
+            }}
+          >
+            {currentPasses === 3 && <Check size={14} />}
+            ⭐ Chấm 3 Lần (Triple-Pass)
+          </button>
+        </div>
+
+        <p style={{ fontSize: '0.73rem', color: '#94a3b8', margin: 0, lineHeight: 1.4 }}>
+          {currentPasses === 3
+            ? `✓ Chấm 3 lượt độc lập (Barem + Soi lỗi + Sư phạm), sau đó Hội đồng ${modelLabel} tự tổng hợp và chốt điểm chính xác.`
+            : `✓ Chấm 1 lần trực tiếp bằng ${modelLabel}, phản hồi nhanh chóng và tiết kiệm token.`}
+        </p>
+      </div>
+    );
+  };
 
   if (!isOpen) return null;
 
@@ -284,27 +398,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               Chọn phương thức chấm bài thi tự luận môn Toán.
             </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px' }}>
-              {/* Option 1: Claude 3 Times (Triple-Pass Consensus) */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+              {/* Option 1: Chấm theo Model Đang Chọn (Tùy chọn 1 lần hoặc 3 lần riêng cho từng model) */}
               <button
                 type="button"
-                onClick={() => setCurrent({ ...current, gradingMode: 'claude_triple_pass', provider: 'claude' })}
+                onClick={() => setCurrent({ ...current, gradingMode: 'triple_pass' })}
                 style={{
                   padding: '14px',
                   borderRadius: 'var(--radius-md)',
                   border:
-                    current.gradingMode === 'claude_triple_pass'
+                    current.gradingMode !== 'triple_consensus'
                       ? '2px solid #f59e0b'
                       : '1px solid var(--border-subtle)',
                   background:
-                    current.gradingMode === 'claude_triple_pass'
+                    current.gradingMode !== 'triple_consensus'
                       ? 'rgba(245, 158, 11, 0.16)'
                       : 'rgba(255, 255, 255, 0.03)',
                   textAlign: 'left',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                   boxShadow:
-                    current.gradingMode === 'claude_triple_pass'
+                    current.gradingMode !== 'triple_consensus'
                       ? '0 0 16px rgba(245, 158, 11, 0.25)'
                       : 'none',
                 }}
@@ -320,16 +434,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Sparkles size={16} color="#f59e0b" />
                     <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.88rem' }}>
-                      Claude 3 Lần (Tối Ưu)
+                      Chấm Theo Model Đang Chọn
                     </span>
                   </div>
                   <span className="badge badge-amber" style={{ fontSize: '0.65rem', padding: '2px 6px' }}>
                     Khuyên dùng ⭐
                   </span>
                 </div>
-                <p style={{ fontSize: '0.74rem', color: '#cbd5e1', lineHeight: 1.4 }}>
-                  Chấm 3 lần độc lập bằng <strong>Claude</strong> qua <code>apikey.pimath.id.vn</code> (Barem + Soi lỗi + Sư phạm), sau đó Hội đồng Claude tổng hợp kết quả chính xác nhất.
+                <p style={{ fontSize: '0.74rem', color: '#cbd5e1', lineHeight: 1.4, margin: 0 }}>
+                  Chấm bài bằng mô hình bạn chọn ở các tab bên dưới ({current.provider === 'openrouter' ? 'Qwen OpenRouter' : current.provider === 'alibabacloud' ? 'Qwen Alibaba Cloud' : current.provider === 'claude' ? 'Claude' : current.provider === 'gemini' ? 'Gemini' : 'OpenAI'}). Tự động áp dụng <strong>1 lần nhanh</strong> hoặc <strong>3 lần (Triple-Pass)</strong> theo cài đặt riêng của model đó.
                 </p>
+                <div style={{ marginTop: '8px', fontSize: '0.72rem', color: '#fde68a', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span>Trạng thái: <strong>{current.provider.toUpperCase()}</strong> đang đặt <strong>{current.modelPasses?.[current.provider] === 1 ? 'Chấm 1 lần' : 'Chấm 3 lần (Triple-Pass)'}</strong></span>
+                </div>
               </button>
 
               {/* Option 2: 3 Models Consensus */}
@@ -374,56 +491,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     3 AI Khác Nhau
                   </span>
                 </div>
-                <p style={{ fontSize: '0.74rem', color: '#cbd5e1', lineHeight: 1.4 }}>
-                  Chạy song song <strong>Gemini + Claude + GPT-4o</strong> cùng prompt & rubric. Tự động so sánh chéo giữa các nền tảng AI khác nhau.
+                <p style={{ fontSize: '0.74rem', color: '#cbd5e1', lineHeight: 1.4, margin: 0 }}>
+                  Chạy song song <strong>Gemini + Claude + GPT-4o</strong> cùng prompt & rubric. Tự động so sánh chéo kết quả giữa 3 nhà phát triển AI khác nhau.
                 </p>
-              </button>
-
-              {/* Option 3: Single Model */}
-              <button
-                type="button"
-                onClick={() => setCurrent({ ...current, gradingMode: 'single' })}
-                style={{
-                  padding: '14px',
-                  borderRadius: 'var(--radius-md)',
-                  border:
-                    current.gradingMode === 'single'
-                      ? '2px solid #06b6d4'
-                      : '1px solid var(--border-subtle)',
-                  background:
-                    current.gradingMode === 'single'
-                      ? 'rgba(6, 182, 212, 0.16)'
-                      : 'rgba(255, 255, 255, 0.03)',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  boxShadow:
-                    current.gradingMode === 'single'
-                      ? '0 0 16px rgba(6, 182, 212, 0.25)'
-                      : 'none',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: '6px',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Bot size={16} color="#06b6d4" />
-                    <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.88rem' }}>
-                      Chấm 1 Lần Nhanh
-                    </span>
-                  </div>
-                  <span className="badge badge-emerald" style={{ fontSize: '0.65rem', padding: '2px 6px' }}>
-                    Đơn lẻ
-                  </span>
+                <div style={{ marginTop: '8px', fontSize: '0.72rem', color: '#c7d2fe', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span>Đối chiếu chéo giữa Google, Anthropic và OpenAI</span>
                 </div>
-                <p style={{ fontSize: '0.74rem', color: '#94a3b8', lineHeight: 1.4 }}>
-                  Chỉ gọi 1 mô hình đã chọn bên dưới (ví dụ Claude Opus 5). Tiết kiệm token và phản hồi nhanh chóng cho các bài thi ngắn.
-                </p>
               </button>
             </div>
 
@@ -938,6 +1011,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </button>
                     </div>
                   </div>
+
+                  {renderPassSelector('gemini', 'Google Gemini')}
                 </>
               )}
 
@@ -1080,6 +1155,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       placeholder="https://apikey.pimath.id.vn/v1"
                     />
                   </div>
+
+                  {renderPassSelector('claude', 'Anthropic Claude')}
                 </>
               )}
 
@@ -1225,6 +1302,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       Mặc định là <code>https://api.openai.com/v1</code>. Có thể đổi sang OpenRouter (<code>https://openrouter.ai/api/v1</code>) hoặc proxy tùy ý.
                     </p>
                   </div>
+
+                  {renderPassSelector('openai', 'OpenAI')}
                 </>
               )}
 
@@ -1245,7 +1324,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </label>
                     <select
                       className="input-field"
-                      value={isCustomOpenRouter ? 'custom' : (current.openrouterModel || 'qwen/qwen3.8-27b:free')}
+                      value={isCustomOpenRouter ? 'custom' : (current.openrouterModel || 'qwen/qwen3.8-flash')}
                       onChange={(e) => {
                         if (e.target.value === 'custom') {
                           setIsCustomOpenRouter(true);
@@ -1255,8 +1334,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         }
                       }}
                     >
+                      <option value="qwen/qwen3.8-flash">
+                        qwen/qwen3.8-flash (Khuyên dùng - Siêu nhanh, Reasoning tokens, Mới nhất)
+                      </option>
                       <option value="qwen/qwen3.8-27b:free">
-                        qwen/qwen3.8-27b:free (Khuyên dùng - Suy luận reasoning cao cấp, Miễn phí)
+                        qwen/qwen3.8-27b:free (Suy luận reasoning CoT, Miễn phí)
                       </option>
                       <option value="qwen/qwen-2.5-vl-72b-instruct:free">
                         qwen/qwen-2.5-vl-72b-instruct:free (Đọc ảnh & chữ viết tay Toán học, Miễn phí)
@@ -1412,6 +1494,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         flexShrink: 0,
                       }}
                     />
+                  </div>
+
+                  {renderPassSelector('openrouter', 'Qwen (OpenRouter)')}
+
+                  {/* Qwen OCR & Vision helper notice */}
+                  <div
+                    style={{
+                      padding: '10px 14px',
+                      background: 'rgba(168, 85, 247, 0.08)',
+                      border: '1px solid rgba(168, 85, 247, 0.25)',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: '0.76rem',
+                      color: '#e9d5ff',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '10px',
+                    }}
+                  >
+                    <Sparkles size={16} color="#c084fc" style={{ flexShrink: 0, marginTop: '2px' }} />
+                    <div style={{ lineHeight: 1.5 }}>
+                      <strong style={{ color: '#ffffff' }}>Tự động OCR chữ viết tay & ảnh bài làm:</strong> Khi bài làm có hình ảnh, hệ thống tự động sử dụng mô hình thị giác chuyên sâu <code>qwen/qwen-2.5-vl-72b-instruct</code> để chuyển hóa toàn bộ chữ viết tay, căn thức, ma trận sang LaTeX chuẩn mực trước khi tiến hành chấm điểm {current.modelPasses?.openrouter === 1 ? '1 lần' : '3 lần'}.
+                    </div>
                   </div>
                 </>
               )}
@@ -1569,6 +1673,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <p style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '4px' }}>
                       Endpoint tương thích OpenAI khu vực Singapore (DashScope / Model Studio).
                     </p>
+                  </div>
+
+                  {renderPassSelector('alibabacloud', 'Alibaba Cloud (Qwen)')}
+
+                  {/* Alibaba Cloud OCR & Vision helper notice */}
+                  <div
+                    style={{
+                      padding: '10px 14px',
+                      background: 'rgba(234, 88, 12, 0.08)',
+                      border: '1px solid rgba(234, 88, 12, 0.25)',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: '0.76rem',
+                      color: '#ffedd5',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '10px',
+                    }}
+                  >
+                    <Sparkles size={16} color="#fb923c" style={{ flexShrink: 0, marginTop: '2px' }} />
+                    <div style={{ lineHeight: 1.5 }}>
+                      <strong style={{ color: '#ffffff' }}>Tự động OCR chữ viết tay & ảnh bài làm:</strong> Khi bài làm có ảnh chụp viết tay, hệ thống sẽ tự động sử dụng mô hình thị giác <code>qwen-vl-max</code> của Alibaba Cloud để chuyển đổi công thức Toán viết tay sang LaTeX trước khi tiến hành chấm bài {current.modelPasses?.alibabacloud === 1 ? '1 lần' : '3 lần'}.
+                    </div>
                   </div>
                 </>
               )}

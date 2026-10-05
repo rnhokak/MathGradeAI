@@ -879,11 +879,27 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
             )}
           </div>
 
-          {/* BẢNG ĐỐI CHIẾU 3 MODEL AI HOẶC 3 LẦN CHẤM CLAUDE */}
+          {/* BẢNG ĐỐI CHIẾU 3 MODEL AI HOẶC 3 LẦN CHẤM CỦA MODEL (QWEN, CLAUDE, GEMINI, OPENAI) */}
           {result.consensusReport && (() => {
-            const isClaudeTriple =
+            const isSingleModelTriple =
               result.consensusReport.evaluations.length > 0 &&
-              result.consensusReport.evaluations.every((e) => e.provider === 'claude');
+              result.consensusReport.evaluations.every(
+                (e) => e.provider === result.consensusReport?.evaluations[0]?.provider
+              );
+            const singleProvider = isSingleModelTriple
+              ? result.consensusReport.evaluations[0]?.provider
+              : null;
+            const singleProviderDisplayName =
+              singleProvider === 'claude'
+                ? 'Claude'
+                : singleProvider === 'openrouter' || singleProvider === 'alibabacloud'
+                ? 'Qwen'
+                : singleProvider === 'gemini'
+                ? 'Gemini'
+                : singleProvider === 'openai'
+                ? 'OpenAI'
+                : 'AI';
+            const isClaudeTriple = singleProvider === 'claude';
 
             return (
               <div
@@ -891,8 +907,8 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                 style={{
                   padding: '18px 20px',
                   background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.85))',
-                  border: isClaudeTriple ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid rgba(99, 102, 241, 0.35)',
-                  boxShadow: isClaudeTriple ? '0 4px 20px rgba(245, 158, 11, 0.15)' : '0 4px 20px rgba(99, 102, 241, 0.1)',
+                  border: isSingleModelTriple ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid rgba(99, 102, 241, 0.35)',
+                  boxShadow: isSingleModelTriple ? '0 4px 20px rgba(245, 158, 11, 0.15)' : '0 4px 20px rgba(99, 102, 241, 0.1)',
                 }}
               >
                 <div
@@ -906,10 +922,10 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                   onClick={() => setShowConsensusDetails(!showConsensusDetails)}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Sparkles size={18} color={isClaudeTriple ? '#f59e0b' : '#818cf8'} />
+                    <Sparkles size={18} color={isSingleModelTriple ? '#f59e0b' : '#818cf8'} />
                     <h3 style={{ fontSize: '0.96rem', fontWeight: 700, color: '#f8fafc' }}>
-                      {isClaudeTriple
-                        ? 'Bảng Đối Chiếu Chấm 3 Lần Bằng Claude (Tối Ưu & Tổng Hợp)'
+                      {isSingleModelTriple
+                        ? `Bảng Đối Chiếu Chấm 3 Lần Bằng ${singleProviderDisplayName} (Tối Ưu & Hội Đồng Tổng Hợp)`
                         : result.consensusReport.evaluations.length >= 3
                         ? 'Bảng Đối Chiếu Điểm 3 Model AI (Gemini + Claude + GPT-4o)'
                         : result.consensusReport.evaluations.length === 2
@@ -921,22 +937,22 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {result.consensusReport.status === 'single_model' && (
                       <span className="badge badge-amber" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
-                        <AlertTriangle size={12} /> {isClaudeTriple ? 'Chỉ 1 lượt Claude (1/3)' : 'Chỉ 1 Model hoàn thành (1/3)'}
+                        <AlertTriangle size={12} /> {isSingleModelTriple ? `Chỉ 1 lượt ${singleProviderDisplayName} (1/3)` : 'Chỉ 1 Model hoàn thành (1/3)'}
                       </span>
                     )}
                     {result.consensusReport.status === 'unanimous' && (
                       <span className="badge badge-emerald" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
-                        <CheckCircle size={12} /> {isClaudeTriple ? 'Đồng thuận tuyệt đối 3 lần chấm' : 'Đồng thuận tuyệt đối (3/3)'}
+                        <CheckCircle size={12} /> {isSingleModelTriple ? `Đồng thuận tuyệt đối 3 lần chấm (${singleProviderDisplayName})` : 'Đồng thuận tuyệt đối (3/3)'}
                       </span>
                     )}
                     {result.consensusReport.status === 'majority' && (
                       <span className="badge badge-amber" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
-                        <Layers size={12} /> {isClaudeTriple ? 'Đồng thuận đa số (Claude)' : `Đồng thuận ${result.consensusReport.evaluations.length >= 3 ? 'đa số (2/3)' : '2 Model'}`}
+                        <Layers size={12} /> {isSingleModelTriple ? `Đồng thuận đa số (${singleProviderDisplayName})` : `Đồng thuận ${result.consensusReport.evaluations.length >= 3 ? 'đa số (2/3)' : '2 Model'}`}
                       </span>
                     )}
                     {result.consensusReport.status === 'resolved_after_retry' && (
                       <span className="badge badge-indigo" style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
-                        <RefreshCw size={12} /> {isClaudeTriple ? 'Hội đồng Claude tổng hợp & chốt điểm' : `Đã chấm lại ${result.consensusReport.regradeCount} lần`}
+                        <RefreshCw size={12} /> {isSingleModelTriple ? `Hội đồng ${singleProviderDisplayName} tổng hợp & chốt điểm` : `Đã chấm lại ${result.consensusReport.regradeCount} lần`}
                       </span>
                     )}
                     {result.consensusReport.status === 'conflict' && (
@@ -999,8 +1015,8 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                           <th style={{ padding: '8px 10px', fontWeight: 600 }}>Tiêu chí thang điểm</th>
                           {result.consensusReport.evaluations.map((ev, idx) => {
                             const isFallback = ev.modelName.includes('Dự phòng');
-                            const headerLabel = isClaudeTriple
-                              ? `CLAUDE: ${ev.modelName}`
+                            const headerLabel = isSingleModelTriple
+                              ? `${singleProviderDisplayName.toUpperCase()}: ${ev.modelName}`
                               : isFallback
                               ? `${ev.provider.toUpperCase()} (Dự phòng)`
                               : ev.provider === 'alibabacloud'
@@ -1015,7 +1031,7 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                                   padding: '8px 10px',
                                   fontWeight: 600,
                                   textAlign: 'center',
-                                  color: isFallback ? '#fbbf24' : isClaudeTriple ? '#f59e0b' : undefined,
+                                  color: isFallback ? '#fbbf24' : isSingleModelTriple ? '#f59e0b' : undefined,
                                 }}
                                 title={
                                   isFallback
@@ -1036,7 +1052,7 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                               background: 'rgba(52, 211, 153, 0.08)',
                             }}
                           >
-                            {isClaudeTriple ? 'Điểm Hội Đồng Chốt' : 'Điểm Đồng Thuận'}
+                            {isSingleModelTriple ? 'Điểm Hội Đồng Chốt' : 'Điểm Đồng Thuận'}
                           </th>
                         </tr>
                       </thead>

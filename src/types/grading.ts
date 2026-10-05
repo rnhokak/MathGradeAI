@@ -118,16 +118,27 @@ export interface StudentSubmission {
 }
 
 export type AIProvider = 'gemini' | 'claude' | 'openai' | 'openrouter' | 'alibabacloud';
-export type GradingMode = 'single' | 'triple_consensus' | 'claude_triple_pass';
+export type GradingMode = 'single' | 'triple_consensus' | 'claude_triple_pass' | 'triple_pass';
+
+export interface ModelPassSettings {
+  gemini?: 1 | 3;
+  claude?: 1 | 3;
+  openai?: 1 | 3;
+  openrouter?: 1 | 3;
+  alibabacloud?: 1 | 3;
+}
 
 export interface TeacherSettings {
   role: 'thầy' | 'cô';
   teacherName: string;
   strictness: 'standard' | 'strict' | 'encouraging';
   provider: AIProvider;
-  gradingMode?: GradingMode; // 'claude_triple_pass' (mặc định - Claude 3 lần tối ưu), 'triple_consensus' (đa model) hoặc 'single' (1 model)
+  gradingMode?: GradingMode; // 'single' (theo model đã chọn), 'triple_consensus' (đa model) hoặc 'claude_triple_pass'
   _gradingModeExplicitlySet?: boolean;
   autoOcrBeforeGrading?: boolean; // Tự động đọc và đối chiếu 3 model trước khi chấm (dùng khi ở chế độ đối chiếu)
+  
+  // Cài đặt số lượt chấm riêng biệt cho mỗi model: 1 lần (dùng một lần) hoặc 3 lần (chấm 3 lần)
+  modelPasses?: ModelPassSettings;
   
   // Cấu hình Hàng đợi & Đối chiếu
   queueDelayMs?: number; // Độ trễ giữa các bài trong hàng đợi (ms), mặc định 2000

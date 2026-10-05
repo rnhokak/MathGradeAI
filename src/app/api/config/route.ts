@@ -88,7 +88,7 @@ export async function GET() {
       },
       openrouter: {
         models: openrouterModels,
-        defaultModel: process.env.OPENROUTER_MODEL || 'qwen/qwen3.8-27b:free',
+        defaultModel: process.env.OPENROUTER_MODEL || 'qwen/qwen3.8-flash',
         baseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
         hasServerKey: Boolean(process.env.OPENROUTER_API_KEY),
       },

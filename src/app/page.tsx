@@ -70,13 +70,20 @@ const DEFAULT_SETTINGS: TeacherSettings = {
   openaiModel: 'gpt-4o',
   openaiBaseUrl: 'https://api.openai.com/v1',
   openrouterApiKey: '',
-  openrouterModel: 'qwen/qwen3.8-27b:free',
+  openrouterModel: 'qwen/qwen3.8-flash',
   openrouterBaseUrl: 'https://openrouter.ai/api/v1',
   openrouterReasoning: true,
   alibabacloudApiKey: '',
   alibabacloudModel: 'qwen-plus-character',
   alibabacloudBaseUrl: 'https://ws-oxwvfx79avt7ebq3.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1',
   model: 'gemini-3.8-flash',
+  modelPasses: {
+    gemini: 3,
+    claude: 3,
+    openai: 3,
+    openrouter: 3,
+    alibabacloud: 3,
+  },
 };
 
 export default function Home() {
@@ -98,6 +105,7 @@ export default function Home() {
         if (parsed.model === 'gemini-2.5-flash') {
           parsed.model = 'gemini-3.8-flash';
         }
+
         // Auto migrate legacy 404 Claude models
         const legacyClaudeModels = [
           'claude-3-7-sonnet-20250219',
@@ -121,6 +129,11 @@ export default function Home() {
           gradingMode = 'claude_triple_pass';
         }
 
+        let openrouterModel = parsed.openrouterModel || DEFAULT_SETTINGS.openrouterModel;
+        if (openrouterModel === 'qwen/qwen3.8-27b:free') {
+          openrouterModel = 'qwen/qwen3.8-flash';
+        }
+
         setSettings({
           ...DEFAULT_SETTINGS,
           ...parsed,
@@ -134,7 +147,7 @@ export default function Home() {
           geminiModel: parsed.geminiModel || parsed.model || DEFAULT_SETTINGS.geminiModel,
           claudeModel,
           openaiModel: parsed.openaiModel || DEFAULT_SETTINGS.openaiModel,
-          openrouterModel: parsed.openrouterModel || DEFAULT_SETTINGS.openrouterModel,
+          openrouterModel,
           claudeBaseUrl,
           openaiBaseUrl: parsed.openaiBaseUrl || DEFAULT_SETTINGS.openaiBaseUrl,
           openrouterBaseUrl: parsed.openrouterBaseUrl || DEFAULT_SETTINGS.openrouterBaseUrl,
@@ -143,6 +156,13 @@ export default function Home() {
           alibabacloudModel: parsed.alibabacloudModel || DEFAULT_SETTINGS.alibabacloudModel,
           alibabacloudBaseUrl: parsed.alibabacloudBaseUrl || DEFAULT_SETTINGS.alibabacloudBaseUrl,
           alibabacloudApiKey: parsed.alibabacloudApiKey || '',
+          modelPasses: {
+            gemini: parsed.modelPasses?.gemini ?? 3,
+            claude: parsed.modelPasses?.claude ?? 3,
+            openai: parsed.modelPasses?.openai ?? 3,
+            openrouter: parsed.modelPasses?.openrouter ?? 3,
+            alibabacloud: parsed.modelPasses?.alibabacloud ?? 3,
+          },
         });
       }
     } catch (e) {
