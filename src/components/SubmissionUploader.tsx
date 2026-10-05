@@ -165,9 +165,9 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
   // Grade a single submission directly (Tự động thử lại tối đa 3 lần nếu gặp lỗi, lỗi 3 lần thì dừng và báo lỗi)
   const gradeSingleSubmission = async (sub: StudentSubmission) => {
     setActiveSubId(sub.id);
-    const mode = settings.gradingMode || 'claude_triple_pass';
+    const mode = settings.gradingMode || 'triple_pass';
     const isTriple = mode === 'triple_consensus';
-    const provider = settings.provider || 'claude';
+    const provider = settings.provider || 'openrouter';
     const passes = settings.modelPasses?.[provider] ?? (mode === 'claude_triple_pass' || mode === 'triple_pass' ? 3 : 1);
     const hasImages = sub.images && sub.images.length > 0;
     const needsOcr = hasImages && (!sub.extractedText || !sub.ocrComparison) && settings.autoOcrBeforeGrading !== false;
@@ -558,9 +558,9 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
   const pendingCount = displaySubmissions.filter(
     (s) => s.status === 'idle' || s.status === 'error' || s.status === 'queued'
   ).length;
-  const mode = settings.gradingMode || 'claude_triple_pass';
+  const mode = settings.gradingMode || 'triple_pass';
   const isTripleMode = mode === 'triple_consensus';
-  const activeProvider = settings.provider || 'claude';
+  const activeProvider = settings.provider || 'openrouter';
   const activePasses = settings.modelPasses?.[activeProvider] ?? (mode === 'claude_triple_pass' || mode === 'triple_pass' ? 3 : 1);
   const activeModelTitle =
     activeProvider === 'openrouter'

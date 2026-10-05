@@ -37,7 +37,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     ...settings,
     provider: settings.provider || 'claude',
     strictness: settings.strictness || 'strict',
-    gradingMode: settings.gradingMode || 'claude_triple_pass',
+    gradingMode: settings.gradingMode || 'triple_pass',
     autoOcrBeforeGrading: settings.autoOcrBeforeGrading ?? false,
     queueDelayMs: settings.queueDelayMs ?? 2000,
     maxRegradeRetries: settings.maxRegradeRetries ?? 2,

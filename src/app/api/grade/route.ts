@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       claudeBaseUrl: resolveClaudeEndpoint(settings?.claudeBaseUrl),
     };
 
-    const gradingMode = effectiveSettings?.gradingMode || 'claude_triple_pass';
+    const gradingMode = effectiveSettings?.gradingMode || 'triple_pass';
 
     // Retrieve API keys from server env
     const envGemini = (process.env.GEMINI_API_KEY || '').trim();
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Mode 2 & 3: Single model provider (có thể cấu hình Chấm 1 lần hoặc Chấm 3 lần Triple-Pass)
-    const provider = effectiveSettings?.provider || (gradingMode === 'claude_triple_pass' ? 'claude' : 'claude');
+    const provider = effectiveSettings?.provider || (gradingMode === 'claude_triple_pass' ? 'claude' : 'openrouter');
     let apiKey = '';
     let backupApiKey: string | undefined = undefined;
 

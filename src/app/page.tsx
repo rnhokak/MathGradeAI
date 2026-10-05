@@ -55,8 +55,8 @@ const DEFAULT_SETTINGS: TeacherSettings = {
   role: 'thầy',
   teacherName: '',
   strictness: 'strict',
-  provider: 'claude',
-  gradingMode: 'claude_triple_pass',
+  provider: 'openrouter',
+  gradingMode: 'triple_pass',
   autoOcrBeforeGrading: false,
   queueDelayMs: 2000,
   maxRegradeRetries: 2,
@@ -123,10 +123,10 @@ export default function Home() {
           claudeBaseUrl = 'https://apikey.pimath.id.vn/v1';
         }
 
-        // Mặc định luôn là claude_triple_pass nếu người dùng chưa chủ động đổi sang chế độ khác
+        // Mặc định luôn là triple_pass (Qwen OpenRouter) nếu người dùng chưa chủ động đổi sang chế độ khác
         let gradingMode = parsed.gradingMode;
         if (!gradingMode || !parsed._gradingModeExplicitlySet) {
-          gradingMode = 'claude_triple_pass';
+          gradingMode = 'triple_pass';
         }
 
         let openrouterModel = parsed.openrouterModel || DEFAULT_SETTINGS.openrouterModel;
@@ -143,7 +143,7 @@ export default function Home() {
           queueDelayMs: parsed.queueDelayMs ?? 2000,
           maxRegradeRetries: parsed.maxRegradeRetries ?? 2,
           consensusTolerance: parsed.consensusTolerance ?? 0.25,
-          provider: parsed.provider || 'claude',
+          provider: parsed.provider || 'openrouter',
           geminiModel: parsed.geminiModel || parsed.model || DEFAULT_SETTINGS.geminiModel,
           claudeModel,
           openaiModel: parsed.openaiModel || DEFAULT_SETTINGS.openaiModel,
