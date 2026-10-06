@@ -117,12 +117,11 @@ export interface StudentSubmission {
   stepMessage?: string;
 }
 
-export type AIProvider = 'gemini' | 'claude' | 'openai' | 'openrouter' | 'alibabacloud';
-export type GradingMode = 'single' | 'single_pass' | 'triple_consensus' | 'claude_triple_pass' | 'triple_pass';
+export type AIProvider = 'openrouter' | 'gemini' | 'openai' | 'alibabacloud';
+export type GradingMode = 'single' | 'single_pass' | 'triple_consensus' | 'triple_pass';
 
 export interface ModelPassSettings {
   gemini?: 1 | 3;
-  claude?: 1 | 3;
   openai?: 1 | 3;
   openrouter?: 1 | 3;
   alibabacloud?: 1 | 3;
@@ -133,7 +132,7 @@ export interface TeacherSettings {
   teacherName: string;
   strictness: 'standard' | 'strict' | 'encouraging';
   provider: AIProvider;
-  gradingMode?: GradingMode; // 'single' (theo model đã chọn), 'triple_consensus' (đa model) hoặc 'claude_triple_pass'
+  gradingMode?: GradingMode; // 'single' (theo model đã chọn), 'triple_consensus' (đa model)
   _gradingModeExplicitlySet?: boolean;
   _gradingPassesExplicitlySet?: boolean;
   autoOcrBeforeGrading?: boolean; // Tương thích ngược: luôn true trong quy trình 2 bước
@@ -153,11 +152,6 @@ export interface TeacherSettings {
   // Google Gemini
   geminiApiKey: string;
   geminiModel: string;
-  
-  // Anthropic Claude
-  claudeApiKey: string;
-  claudeModel: string;
-  claudeBaseUrl?: string;
   
   // OpenAI / OpenAPI-compatible
   openaiApiKey: string;

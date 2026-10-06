@@ -3,9 +3,7 @@ import { RubricData, StudentSubmission, TeacherSettings } from '@/types/grading'
 import {
   gradeWithProvider,
   gradeWithThreeModelsAndConsensus,
-  gradeWithClaudeTriplePass,
   gradeWithProviderTriplePass,
-  resolveClaudeEndpoint,
 } from '@/utils/aiGrading';
 
 export async function POST(req: NextRequest) {
@@ -28,30 +26,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Always normalize claudeBaseUrl to prevent any legacy /v1/messages proxy errors
     const effectiveSettings: TeacherSettings = {
       ...(settings || {}),
-      claudeBaseUrl: resolveClaudeEndpoint(settings?.claudeBaseUrl),
     };
 
-    const gradingMode = effectiveSettings?.gradingMode || 'triple_pass';
+    const gradingMode = effectiveSettings?.gradingMode || 'single_pass';
 
     // Retrieve API keys from server env
     const envGemini = (process.env.GEMINI_API_KEY || '').trim();
-    const envClaude = (process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '').trim();
     const envOpenai = (process.env.OPENAI_API_KEY || '').trim();
     const envOpenrouter = (process.env.OPENROUTER_API_KEY || '').trim();
     const envAlibaba = (process.env.ALIBABACLOUD_API_KEY || '').trim();
 
     // Client provided keys
     const clientGemini = (req.headers.get('x-gemini-api-key') || settings?.geminiApiKey || '').trim();
-    const clientClaude = (req.headers.get('x-claude-api-key') || settings?.claudeApiKey || '').trim();
     const clientOpenai = (req.headers.get('x-openai-api-key') || settings?.openaiApiKey || '').trim();
     const clientOpenrouter = (req.headers.get('x-openrouter-api-key') || settings?.openrouterApiKey || '').trim();
     const clientAlibaba = (req.headers.get('x-alibabacloud-api-key') || settings?.alibabacloudApiKey || '').trim();
 
     const geminiKey = clientGemini || envGemini;
-    const claudeKey = clientClaude || envClaude;
     const openaiKey = clientOpenai || envOpenai;
     const openrouterKey = clientOpenrouter || envOpenrouter;
     const alibabaKey = clientAlibaba || envAlibaba;
@@ -59,17 +52,79 @@ export async function POST(req: NextRequest) {
     // Server environment backup keys (used if client keys are invalid/malformed)
     const backupKeys = {
       gemini: envGemini && envGemini !== clientGemini ? envGemini : undefined,
-      claude: envClaude && envClaude !== clientClaude ? envClaude : undefined,
       openai: envOpenai && envOpenai !== clientOpenai ? envOpenai : undefined,
       openrouter: envOpenrouter && envOpenrouter !== clientOpenrouter ? envOpenrouter : undefined,
       alibabacloud: envAlibaba && envAlibaba !== clientAlibaba ? envAlibaba : undefined,
     };
 
-    // Mode 1: Triple-Model Consensus (Gemini + Claude + OpenAI + OpenRouter + Alibaba Cloud)
+    const provider = effectiveSettings?.provider || 'openrouter';
+
+    // ĐẶC BIỆT: Khi chọn model là Qwen OpenRouter, CHỈ dùng model Qwen để chấm bài
+    // cho cả trường hợp chấm 1 lần lẫn chấm 3 lần (Triple-Pass), không trộn bất kỳ model nào khác.
+    if (provider === 'openrouter') {
+      const apiKey = openrouterKey;
+      const backupApiKey = backupKeys.openrouter;
+      if (!apiKey) {
+        return NextResponse.json(
+          {
+            error:
+              'Chưa cấu hình OpenRouter API Key. Vui lòng bấm vào Cài Đặt (chọn tab OpenRouter) để nhập API Key, hoặc khai báo OPENROUTER_API_KEY trong file .env.local.',
+          },
+          { status: 400 }
+        );
+      }
+
+      const passes =
+        effectiveSettings?.gradingPasses ??
+        effectiveSettings?.modelPasses?.openrouter ??
+        (gradingMode === 'triple_consensus' ? 3 : 1);
+
+      if (passes === 3) {
+        console.log(`[API /grade] Chạy chế độ Chấm 3 Lần độc quyền bằng Qwen OpenRouter (Triple-Pass: Barem + Phản biện + Sư phạm)...`);
+        const { gradingResult, consensusReport } = await gradeWithProviderTriplePass(
+          'openrouter',
+          submission,
+          rubric,
+          effectiveSettings,
+          apiKey,
+          backupApiKey
+        );
+
+        return NextResponse.json({
+          success: true,
+          gradingResult,
+          consensusReport,
+          ocrComparison: gradingResult.ocrComparison || submission.ocrComparison,
+          extractedText: submission.extractedText,
+          mode: 'openrouter_triple_pass',
+          modelUsed: consensusReport?.modelsUsed?.[0] || 'Qwen OpenRouter (Chấm 3 Lần)',
+        });
+      }
+
+      // Chấm 1 lần nhanh bằng Qwen OpenRouter
+      console.log(`[API /grade] Chạy chế độ Chấm 1 Lần Nhanh bằng Qwen OpenRouter (${effectiveSettings.openrouterModel || 'qwen/qwen3.8-27b'})`);
+      const { gradingResult, modelUsed } = await gradeWithProvider(
+        submission,
+        rubric,
+        effectiveSettings,
+        apiKey,
+        backupApiKey
+      );
+
+      return NextResponse.json({
+        success: true,
+        gradingResult,
+        ocrComparison: gradingResult.ocrComparison || submission.ocrComparison,
+        extractedText: submission.extractedText,
+        mode: 'openrouter',
+        modelUsed,
+      });
+    }
+
+    // Mode 1: Triple-Model Consensus (Chỉ áp dụng khi không dùng OpenRouter đơn lẻ)
     if (gradingMode === 'triple_consensus') {
       const availableKeys = {
         gemini: geminiKey,
-        claude: claudeKey,
         openai: openaiKey,
         openrouter: openrouterKey,
         alibabacloud: alibabaKey,
@@ -80,7 +135,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             error:
-              'Chưa cấu hình API Key nào trong Cài Đặt hoặc .env.local (cần ít nhất API Key của Gemini, Claude, OpenAI, OpenRouter hoặc Alibaba Cloud để chấm đối chiếu).',
+              'Chưa cấu hình API Key nào trong Cài Đặt hoặc .env.local (cần ít nhất API Key của Gemini, OpenAI hoặc Alibaba Cloud để chấm đối chiếu).',
           },
           { status: 400 }
         );
@@ -104,8 +159,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Mode 2 & 3: Single model provider (có thể cấu hình Chấm 1 lần hoặc Chấm 3 lần Triple-Pass)
-    const provider = effectiveSettings?.provider || (gradingMode === 'claude_triple_pass' ? 'claude' : 'openrouter');
+    // Mode 2 & 3: Các Single model provider khác (Alibaba Cloud, OpenAI, Gemini)
     let apiKey = '';
     let backupApiKey: string | undefined = undefined;
 
@@ -117,30 +171,6 @@ export async function POST(req: NextRequest) {
           {
             error:
               'Chưa cấu hình Alibaba Cloud Model Studio API Key. Vui lòng bấm vào Cài Đặt (chọn tab Alibaba Cloud) để nhập API Key, hoặc khai báo ALIBABACLOUD_API_KEY trong file .env.local.',
-          },
-          { status: 400 }
-        );
-      }
-    } else if (provider === 'openrouter') {
-      apiKey = openrouterKey;
-      backupApiKey = backupKeys.openrouter;
-      if (!apiKey) {
-        return NextResponse.json(
-          {
-            error:
-              'Chưa cấu hình OpenRouter API Key. Vui lòng bấm vào Cài Đặt (chọn tab OpenRouter) để nhập API Key, hoặc khai báo OPENROUTER_API_KEY trong file .env.local.',
-          },
-          { status: 400 }
-        );
-      }
-    } else if (provider === 'claude') {
-      apiKey = claudeKey;
-      backupApiKey = backupKeys.claude;
-      if (!apiKey) {
-        return NextResponse.json(
-          {
-            error:
-              'Chưa cấu hình Anthropic Claude API Key. Vui lòng bấm vào Cài Đặt (chọn tab Claude) để nhập API Key, hoặc khai báo ANTHROPIC_API_KEY trong file .env.local.',
           },
           { status: 400 }
         );

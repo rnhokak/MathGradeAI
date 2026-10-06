@@ -18,8 +18,6 @@ import {
   buildGradingPrompt,
   buildMathOcrPrompt,
   buildOcrConsensusPrompt,
-  buildClaudeTriplePassPrompt,
-  buildClaudeSynthesisPrompt,
   buildModelTriplePassPrompt,
   buildModelSynthesisPrompt,
 } from './promptBuilder';
@@ -109,41 +107,6 @@ export function normalizeBase64Image(input: string): { mime: string; data: strin
   return { mime, data: trimmed.replace(/\s+/g, '') };
 }
 
-/**
- * Chuẩn hóa URL endpoint cho Claude API (tương thích Anthropic Messages API và proxy apikey.pimath.id.vn)
- */
-export function resolveClaudeEndpoint(rawBaseUrl?: string): string {
-  let url = (
-    rawBaseUrl ||
-    process.env.CLAUDE_BASE_URL ||
-    'https://apikey.pimath.id.vn/v1'
-  )
-    .trim()
-    .replace(/\/+$/, '');
-
-  if (!/^https?:\/\//i.test(url)) {
-    url = `https://${url}`;
-  }
-
-  // Bất kỳ URL nào liên quan đến pimath.id.vn (kể cả apikey.pimath.id.vn hay claudecode.pimath.id.vn, /v1, /v1/messages...)
-  // bắt buộc phải trỏ về endpoint chuẩn Anthropic Messages: https://apikey.pimath.id.vn/anthropic/v1/messages
-  // Tuyệt đối không gọi /v1/messages trên pimath vì sẽ bị lỗi 500: Failed to create chat: no chat ID returned
-  if (url.toLowerCase().includes('pimath.id.vn')) {
-    const target = 'https://apikey.pimath.id.vn/anthropic/v1/messages';
-    console.log(`[CLAUDE_RESOLVER] pimath detected: raw="${rawBaseUrl}" -> target="${target}"`);
-    return target;
-  }
-
-  if (url.endsWith('/messages')) {
-    return url;
-  }
-
-  if (url.endsWith('/v1')) {
-    return `${url}/messages`;
-  }
-
-  return `${url}/v1/messages`;
-}
 
 
 /**
@@ -580,146 +543,6 @@ export async function transcribeImageWithGemini(
   };
 }
 
-/**
- * Transcribe math handwritten images using Anthropic Claude
- */
-export async function transcribeImageWithClaude(
-  images: string[],
-  studentName: string,
-  settings: TeacherSettings,
-  apiKey: string,
-  backupApiKey?: string,
-  pass?: 1 | 2 | 3,
-  promptOverride?: string
-): Promise<{ transcription: string; modelUsed: string }> {
-  if (!apiKey) {
-    throw new Error('Chưa cấu hình Anthropic Claude API Key.');
-  }
-
-  const endpointUrl = resolveClaudeEndpoint(settings.claudeBaseUrl);
-  let model = settings.claudeModel || process.env.CLAUDE_MODEL || 'claude-opus-5';
-  const legacyClaudeModels = [
-    'claude-3-7-sonnet-20250219',
-    'claude-3-5-sonnet-20241022',
-    'claude-3-5-haiku-20241022',
-    'claude-3-opus-20240229',
-  ];
-  if (legacyClaudeModels.includes(model)) {
-    model = 'claude-opus-5';
-  } else if (model === 'claude-haiku-4-5-20251001') {
-    model = 'claude-haiku-4-5';
-  } else if (model === 'claude-opus-4-6') {
-    model = 'claude-opus-4-7';
-  }
-
-  const promptText = promptOverride || buildMathOcrPrompt(studentName, pass);
-  const contentBlocks: any[] = [];
-
-  for (const imgUrl of images) {
-    const { mime, data } = normalizeBase64Image(imgUrl);
-    if (data) {
-      contentBlocks.push({
-        type: 'image',
-        source: {
-          type: 'base64',
-          media_type: mime,
-          data,
-        },
-      });
-    }
-  }
-
-  contentBlocks.push({
-    type: 'text',
-    text: promptText,
-  });
-
-  let response: Response | null = null;
-  let lastError: any = null;
-  const MAX_FETCH_RETRIES = 3;
-
-  for (let attempt = 1; attempt <= MAX_FETCH_RETRIES; attempt++) {
-    try {
-      console.log(`[TRANSCRIBE_CLAUDE_FETCH] (Lần ${attempt}/${MAX_FETCH_RETRIES}) Calling ${endpointUrl} with model=${model}`);
-      const res = await fetch(endpointUrl, {
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 4096,
-          stream: false,
-          strict_images: true,
-          temperature: 0.0,
-          messages: [
-            {
-              role: 'user',
-              content: contentBlocks,
-            },
-          ],
-        }),
-      });
-
-      if (!res.ok) {
-        let errorDetail = res.statusText;
-        try {
-          const errJson = await res.json();
-          errorDetail = errJson.error?.message || errJson.message || JSON.stringify(errJson);
-        } catch { }
-        if (
-          (res.status === 401 || /invalid x-api-key/i.test(errorDetail)) &&
-          backupApiKey &&
-          backupApiKey !== apiKey
-        ) {
-          return transcribeImageWithClaude(images, studentName, settings, backupApiKey);
-        }
-        if (res.status === 401 || /invalid x-api-key/i.test(errorDetail)) {
-          throw new Error(`Anthropic Claude OCR: API Key không hợp lệ (401 Unauthorized).`);
-        }
-        throw new Error(`Claude OCR lỗi (${res.status}): ${errorDetail}`);
-      }
-
-      response = res;
-      break;
-    } catch (err: any) {
-      lastError = err;
-      console.warn(`[TRANSCRIBE_CLAUDE_FETCH] Lần ${attempt}/${MAX_FETCH_RETRIES} gặp lỗi:`, err.message || err);
-      if (/401|invalid x-api-key/i.test(err.message || '')) {
-        throw err;
-      }
-      if (attempt < MAX_FETCH_RETRIES) {
-        await new Promise((r) => setTimeout(r, attempt * 1200));
-      }
-    }
-  }
-
-  if (!response || !response.ok) {
-    throw lastError || new Error(`Claude OCR thất bại sau ${MAX_FETCH_RETRIES} lần thử.`);
-  }
-
-  const data = await response.json();
-  let textOutput = '';
-  if (Array.isArray(data.content)) {
-    textOutput = data.content
-      .filter((b: any) => b.type === 'text')
-      .map((b: any) => b.text)
-      .join('\n');
-  } else if (typeof data.content === 'string') {
-    textOutput = data.content;
-  } else if (data.choices && data.choices[0]?.message) {
-    textOutput = data.choices[0].message.content || '';
-  } else if (data.choices && data.choices[0]?.text) {
-    textOutput = data.choices[0].text;
-  }
-
-  return {
-    transcription: textOutput.trim(),
-    modelUsed: model,
-  };
-}
 
 /**
  * Transcribe math handwritten images using OpenAI
@@ -844,7 +667,7 @@ export async function transcribeImageWithOpenRouter(
   // 1. Thử gọi trực tiếp qua @openrouter/sdk (Chuẩn official SDK)
   try {
     const orSdk = createOpenRouterSdk(apiKey, settings.openrouterBaseUrl);
-    const sdkRes: any = await orSdk.chat.send({
+    const chatRequest: any = {
       model,
       messages: [
         {
@@ -852,15 +675,34 @@ export async function transcribeImageWithOpenRouter(
           content: userContents,
         },
       ],
+      stream: true,
+    };
+    if (settings.openrouterReasoning !== false) {
+      chatRequest.reasoning = { effort: 'high' };
+    }
+
+    const stream = await orSdk.chat.send({
+      chatRequest,
     } as any);
 
-    const content = sdkRes?.choices?.[0]?.message?.content;
+    let content = '';
+    let reasoning: string | undefined;
+
+    for await (const chunk of stream as AsyncIterable<any>) {
+      const delta = chunk.choices?.[0]?.delta;
+      if (delta?.content) {
+        content += delta.content;
+      }
+      if (delta?.reasoning || (delta as any)?.reasoning_content) {
+        reasoning = (reasoning || '') + (delta?.reasoning || (delta as any)?.reasoning_content);
+      }
+    }
+
     if (content && typeof content === 'string' && content.trim().length > 0) {
       let cleaned = content.trim();
-      let reasoning: string | undefined;
       const thinkMatch = cleaned.match(/<think>([\s\S]*?)<\/think>/i);
       if (thinkMatch) {
-        reasoning = thinkMatch[1].trim();
+        reasoning = reasoning || thinkMatch[1].trim();
         cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/i, '').trim();
       }
       cleaned = cleaned
@@ -1046,7 +888,7 @@ export async function transcribeImageWithAlibabaCloud(
 }
 
 /**
- * Transcribe math handwritten images using 3-4 models (Gemini, Claude, OpenAI, Qwen/OpenRouter),
+ * Transcribe math handwritten images using multiple AI models (Gemini, OpenAI, Qwen/OpenRouter),
  * compare transcriptions line by line, resolve discrepancies with original image,
  * and synthesize the authoritative consensus transcription.
  */
@@ -1055,14 +897,12 @@ export async function transcribeWithThreeModelsAndConsensus(
   settings: TeacherSettings,
   apiKeys: {
     gemini?: string;
-    claude?: string;
     openai?: string;
     openrouter?: string;
     alibabacloud?: string;
   },
   backupKeys?: {
     gemini?: string;
-    claude?: string;
     openai?: string;
     openrouter?: string;
     alibabacloud?: string;
@@ -1090,7 +930,6 @@ export async function transcribeWithThreeModelsAndConsensus(
   }
 
   const effectiveGeminiKey = apiKeys.gemini || backupKeys?.gemini;
-  const effectiveClaudeKey = apiKeys.claude || backupKeys?.claude;
   const effectiveOpenaiKey = apiKeys.openai || backupKeys?.openai;
   const effectiveOpenrouterKey = apiKeys.openrouter || backupKeys?.openrouter;
   const effectiveAlibabaKey = apiKeys.alibabacloud || backupKeys?.alibabacloud;
@@ -1117,9 +956,6 @@ export async function transcribeWithThreeModelsAndConsensus(
         undefined,
         userOpenRouterModel
       );
-    } else if (effectiveClaudeKey) {
-      chosenProvider = 'claude';
-      singlePromise = transcribeImageWithClaude(submission.images, submission.studentName, settings, effectiveClaudeKey, backupKeys?.claude, 1);
     } else if (effectiveGeminiKey) {
       chosenProvider = 'gemini';
       singlePromise = transcribeImageWithGemini(submission.images, submission.studentName, settings, effectiveGeminiKey, backupKeys?.gemini, 1);
@@ -1210,9 +1046,12 @@ export async function transcribeWithThreeModelsAndConsensus(
       ).then((res) => ({ transcription: res.transcription, modelUsed: 'Lần 3: Qwen 3.8 Flash (Công thức & Biến đổi)' })),
     });
   } else {
-    // Fallback dự phòng nếu chưa có OpenRouter Key
+    if (settings.provider === 'openrouter') {
+      throw new Error('Chưa cấu hình OpenRouter API Key để nhận diện công thức toán bằng Qwen. Vui lòng vào Cài Đặt hoặc khai báo OPENROUTER_API_KEY trong .env.local.');
+    }
+
+    // Fallback dự phòng nếu chọn provider khác và chưa có OpenRouter Key
     const available = [
-      effectiveClaudeKey ? { p: 'claude' as AIProvider, k: effectiveClaudeKey, b: backupKeys?.claude } : null,
       effectiveGeminiKey ? { p: 'gemini' as AIProvider, k: effectiveGeminiKey, b: backupKeys?.gemini } : null,
       effectiveOpenaiKey ? { p: 'openai' as AIProvider, k: effectiveOpenaiKey, b: backupKeys?.openai } : null,
     ].filter(Boolean) as Array<{ p: AIProvider; k: string; b?: string }>;
@@ -1275,22 +1114,28 @@ export async function transcribeWithThreeModelsAndConsensus(
   let arbitratedBy = 'AI Verification';
 
   try {
-    // 1. Ưu tiên OpenRouter Qwen 3 VL 235B cho Thẩm định & Verify (Consensus Pass) nếu có key
+    // 1. Thẩm định bằng OpenRouter Qwen 3 VL 235B
     if (effectiveOpenrouterKey) {
       try {
-        const client = createOpenRouterClient(effectiveOpenrouterKey, settings.openrouterBaseUrl);
+        const orSdk = createOpenRouterSdk(effectiveOpenrouterKey, settings.openrouterBaseUrl);
         const arbModel = 'qwen/qwen3-vl-235b-a22b-instruct';
         const userContents: any[] = [{ type: 'text', text: arbitrationPrompt }];
         for (const imgUrl of submission.images) {
           const formattedUrl = imgUrl.startsWith('data:') ? imgUrl : `data:image/jpeg;base64,${imgUrl}`;
           userContents.push({ type: 'image_url', image_url: { url: formattedUrl, detail: 'high' } });
         }
-        const arbRes: any = await (client.chat.completions.create as any)({
+        const chatRequest: any = {
           model: arbModel,
           messages: [{ role: 'user', content: userContents }],
+          stream: true,
           temperature: 0.0,
-        });
-        const rawText = arbRes?.choices?.[0]?.message?.content || '';
+        };
+        const stream = await orSdk.chat.send({ chatRequest } as any);
+        let rawText = '';
+        for await (const chunk of stream as AsyncIterable<any>) {
+          const delta = chunk.choices?.[0]?.delta;
+          if (delta?.content) rawText += delta.content;
+        }
         const parsedArb = extractJsonFromText(rawText);
         if (parsedArb.consensusText) {
           consensusText = parsedArb.consensusText;
@@ -1300,12 +1145,37 @@ export async function transcribeWithThreeModelsAndConsensus(
           arbitratedBy = 'Qwen 3 VL 235B Verification';
         }
       } catch (orArbErr: any) {
-        console.warn('[OCR Arbitration OpenRouter] gặp lỗi:', orArbErr.message || orArbErr);
+        console.warn('[OCR Arbitration OpenRouter SDK] gặp lỗi, thử OpenAI client:', orArbErr.message || orArbErr);
+        try {
+          const client = createOpenRouterClient(effectiveOpenrouterKey, settings.openrouterBaseUrl);
+          const arbModel = 'qwen/qwen3-vl-235b-a22b-instruct';
+          const userContents: any[] = [{ type: 'text', text: arbitrationPrompt }];
+          for (const imgUrl of submission.images) {
+            const formattedUrl = imgUrl.startsWith('data:') ? imgUrl : `data:image/jpeg;base64,${imgUrl}`;
+            userContents.push({ type: 'image_url', image_url: { url: formattedUrl, detail: 'high' } });
+          }
+          const arbRes: any = await (client.chat.completions.create as any)({
+            model: arbModel,
+            messages: [{ role: 'user', content: userContents }],
+            temperature: 0.0,
+          });
+          const rawText = arbRes?.choices?.[0]?.message?.content || '';
+          const parsedArb = extractJsonFromText(rawText);
+          if (parsedArb.consensusText) {
+            consensusText = parsedArb.consensusText;
+            if (parsedArb.comparisonSummary) comparisonSummary = parsedArb.comparisonSummary;
+            hasDiscrepancies = Boolean(parsedArb.hasDiscrepancies);
+            discrepancies = Array.isArray(parsedArb.discrepancies) ? parsedArb.discrepancies : [];
+            arbitratedBy = 'Qwen 3 VL 235B Verification';
+          }
+        } catch (clientErr) {
+          console.warn('[OCR Arbitration OpenRouter fallback] gặp lỗi:', clientErr);
+        }
       }
     }
 
-    // 2. Dự phòng Gemini cho Arbitration nếu chưa hoàn tất
-    if ((arbitratedBy === 'AI Verification' || !consensusText) && effectiveGeminiKey) {
+    // 2. Dự phòng Gemini cho Arbitration (CHỈ áp dụng khi provider KHÔNG PHẢI openrouter)
+    if (settings.provider !== 'openrouter' && (arbitratedBy === 'AI Verification' || !consensusText) && effectiveGeminiKey) {
       const ai = new GoogleGenAI({ apiKey: effectiveGeminiKey });
       const contents: any[] = [];
       for (const imgUrl of submission.images) {
@@ -1341,61 +1211,6 @@ export async function transcribeWithThreeModelsAndConsensus(
         } catch (e: any) {
           console.warn(`[OCR Arbitration Gemini] ${m} gặp lỗi:`, e.message || e);
         }
-      }
-    }
-
-    // 3. Dự phòng Claude cho Arbitration nếu chưa xong
-    if ((arbitratedBy === 'AI Verification' || !consensusText) && effectiveClaudeKey) {
-      try {
-        const contentBlocks: any[] = [];
-        for (const imgUrl of submission.images) {
-          const { mime, data } = normalizeBase64Image(imgUrl);
-          if (data) {
-            contentBlocks.push({
-              type: 'image',
-              source: { type: 'base64', media_type: mime, data },
-            });
-          }
-        }
-        contentBlocks.push({ type: 'text', text: arbitrationPrompt });
-
-        const claudeEndpoint = resolveClaudeEndpoint(settings.claudeBaseUrl || process.env.CLAUDE_BASE_URL);
-        const claudeResp = await fetch(claudeEndpoint, {
-          method: 'POST',
-          headers: {
-            'x-api-key': effectiveClaudeKey,
-            'anthropic-version': '2023-06-01',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: settings.claudeModel || process.env.CLAUDE_MODEL || 'claude-opus-5',
-            max_tokens: 4096,
-            stream: false,
-            strict_images: true,
-            temperature: 0.0,
-            messages: [{ role: 'user', content: contentBlocks }],
-          }),
-        });
-
-        if (claudeResp.ok) {
-          const claudeData = await claudeResp.json();
-          let rawText = '';
-          if (Array.isArray(claudeData.content)) {
-            rawText = claudeData.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n');
-          } else if (typeof claudeData.content === 'string') {
-            rawText = claudeData.content;
-          }
-          const parsedArb = extractJsonFromText(rawText);
-          if (parsedArb.consensusText) {
-            consensusText = parsedArb.consensusText;
-            if (parsedArb.comparisonSummary) comparisonSummary = parsedArb.comparisonSummary;
-            hasDiscrepancies = Boolean(parsedArb.hasDiscrepancies);
-            discrepancies = Array.isArray(parsedArb.discrepancies) ? parsedArb.discrepancies : [];
-            arbitratedBy = 'Claude Opus 5 Verification';
-          }
-        }
-      } catch (claudeArbErr: any) {
-        console.warn('[OCR Arbitration Claude] gặp lỗi:', claudeArbErr.message || claudeArbErr);
       }
     }
 
@@ -1518,190 +1333,6 @@ export async function gradeWithGemini(
   return { gradingResult, modelUsed };
 }
 
-/**
- * Core function to grade with Claude API using a customized prompt and temperature
- */
-export async function gradeWithClaudeCustomPrompt(
-  promptText: string,
-  submission: StudentSubmission,
-  rubric: RubricData,
-  settings: TeacherSettings,
-  apiKey: string,
-  backupApiKey?: string,
-  temperature: number = 0.1
-): Promise<{ gradingResult: GradingResult; modelUsed: string; reasoning?: string; rawOutput: string }> {
-  if (!apiKey) {
-    throw new Error(
-      'Chưa cấu hình Anthropic Claude API Key. Vui lòng vào Cài Đặt (chọn mục Claude) để nhập API Key, hoặc khai báo ANTHROPIC_API_KEY trong file .env.local.'
-    );
-  }
-
-  const endpointUrl = resolveClaudeEndpoint(settings.claudeBaseUrl);
-  let model = settings.claudeModel || process.env.CLAUDE_MODEL || 'claude-opus-5';
-  const legacyClaudeModels = [
-    'claude-3-7-sonnet-20250219',
-    'claude-3-5-sonnet-20241022',
-    'claude-3-5-haiku-20241022',
-    'claude-3-opus-20240229',
-  ];
-  if (legacyClaudeModels.includes(model)) {
-    model = 'claude-opus-5';
-  } else if (model === 'claude-haiku-4-5-20251001') {
-    model = 'claude-haiku-4-5';
-  } else if (model === 'claude-opus-4-6') {
-    model = 'claude-opus-4-7';
-  }
-
-  const contentBlocks: any[] = [];
-
-  // Add handwriting scans / images
-  if (submission.images && submission.images.length > 0) {
-    for (const imgUrl of submission.images) {
-      const { mime, data } = normalizeBase64Image(imgUrl);
-      if (data) {
-        contentBlocks.push({
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: mime,
-            data,
-          },
-        });
-      }
-    }
-  }
-
-  contentBlocks.push({
-    type: 'text',
-    text: promptText,
-  });
-
-  const requestPayload: any = {
-    model,
-    max_tokens: 8192,
-    stream: false,
-    strict_images: true,
-    temperature,
-    messages: [
-      {
-        role: 'user',
-        content: contentBlocks,
-      },
-    ],
-  };
-
-  const reasoningEffort = process.env.CLAUDE_REASONING_EFFORT || (model.includes('opus') ? 'medium' : undefined);
-  if (reasoningEffort) {
-    requestPayload.reasoning_effort = reasoningEffort;
-  }
-
-  let response: Response | null = null;
-  let lastError: any = null;
-  const MAX_FETCH_RETRIES = 3;
-
-  for (let attempt = 1; attempt <= MAX_FETCH_RETRIES; attempt++) {
-    try {
-      console.log(`[GRADE_CLAUDE_FETCH] (Lần ${attempt}/${MAX_FETCH_RETRIES}) Calling ${endpointUrl} with model=${model} (temp=${temperature})`);
-      const res = await fetch(endpointUrl, {
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestPayload),
-      });
-
-      if (!res.ok) {
-        let errorDetail = res.statusText;
-        try {
-          const errJson = await res.json();
-          errorDetail = errJson.error?.message || errJson.message || JSON.stringify(errJson);
-        } catch {
-          // ignore
-        }
-        if ((res.status === 401 || /invalid x-api-key/i.test(errorDetail)) && backupApiKey && backupApiKey !== apiKey) {
-          console.warn('[Claude] Key trình duyệt không hợp lệ (401). Đang tự động chuyển sang server backup key từ .env.local...');
-          return gradeWithClaudeCustomPrompt(promptText, submission, rubric, settings, backupApiKey, undefined, temperature);
-        }
-        if (res.status === 401 || /invalid x-api-key/i.test(errorDetail)) {
-          throw new Error('Anthropic Claude: API Key không hợp lệ hoặc đã hết hạn (401 Unauthorized).');
-        }
-        throw new Error(`Lỗi từ Claude API (${res.status}): ${errorDetail}`);
-      }
-
-      response = res;
-      break;
-    } catch (fetchErr: any) {
-      lastError = fetchErr;
-      console.warn(`[GRADE_CLAUDE_FETCH] Lần ${attempt}/${MAX_FETCH_RETRIES} gặp lỗi:`, fetchErr.message || fetchErr);
-      if (/401|invalid x-api-key/i.test(fetchErr.message || '')) {
-        throw fetchErr;
-      }
-      if (attempt < MAX_FETCH_RETRIES) {
-        await new Promise((r) => setTimeout(r, attempt * 1200));
-      }
-    }
-  }
-
-  if (!response || !response.ok) {
-    throw lastError || new Error(`Gọi Claude API thất bại sau ${MAX_FETCH_RETRIES} lần thử.`);
-  }
-
-  const data = await response.json();
-  let textOutput = '';
-  let reasoningText = '';
-
-  if (Array.isArray(data.content)) {
-    textOutput = data.content
-      .filter((b: any) => b.type === 'text')
-      .map((b: any) => b.text)
-      .join('\n');
-  } else if (typeof data.content === 'string') {
-    textOutput = data.content;
-  } else if (data.choices && data.choices[0]?.message) {
-    textOutput = data.choices[0].message.content || '';
-    reasoningText = data.choices[0].message.reasoning_content || '';
-  } else if (data.choices && data.choices[0]?.text) {
-    textOutput = data.choices[0].text;
-  }
-
-  const parsedJson = extractJsonFromText(textOutput);
-  const gradingResult = buildGradingResult(parsedJson, submission, rubric);
-  if (reasoningText && !gradingResult.reasoningText) {
-    gradingResult.reasoningText = reasoningText;
-  }
-
-  return { gradingResult, modelUsed: model, reasoning: reasoningText, rawOutput: textOutput };
-}
-
-/**
- * Grade using Anthropic Claude API (Claude 3.7 Sonnet, Claude 3.5 Sonnet, etc.)
- */
-export async function gradeWithClaude(
-  submission: StudentSubmission,
-  rubric: RubricData,
-  settings: TeacherSettings,
-  apiKey: string,
-  backupApiKey?: string
-): Promise<{ gradingResult: GradingResult; modelUsed: string; reasoning?: string }> {
-  const promptText = buildGradingPrompt(
-    rubric,
-    submission.studentName,
-    settings,
-    submission.extractedText
-  );
-  const res = await gradeWithClaudeCustomPrompt(
-    promptText,
-    submission,
-    rubric,
-    settings,
-    apiKey,
-    backupApiKey,
-    0.1
-  );
-  return { gradingResult: res.gradingResult, modelUsed: res.modelUsed, reasoning: res.reasoning };
-}
 
 /**
  * Fallback algorithmic synthesis if LLM synthesis fails
@@ -1773,13 +1404,6 @@ export function fallbackSynthesizePasses(
   };
 }
 
-export function fallbackSynthesizeClaudePasses(
-  passes: { passNumber: number; modelLabel: string; result: GradingResult }[],
-  rubric: RubricData,
-  submission: StudentSubmission
-): GradingResult {
-  return fallbackSynthesizePasses('claude', passes, rubric, submission);
-}
 
 /**
  * Grade using Qwen on OpenRouter.ai with custom prompt & temperature
@@ -2233,7 +1857,7 @@ export async function gradeWithOpenAICustomPrompt(
 }
 
 /**
- * Chấm điểm 3 lần độc lập bằng MỌI mô hình AI (Qwen, Claude, Gemini, OpenAI) với 3 prompt tối ưu:
+ * Chấm điểm 3 lần độc lập bằng MỌI mô hình AI (Qwen, Gemini, OpenAI) với 3 prompt tối ưu:
  * - Lần 1: Chuẩn mực theo barem & tiến trình
  * - Lần 2: Giám khảo phản biện sắc sảo, khó tính & soi lỗi tiềm ẩn
  * - Lần 3: Chuyên gia sư phạm, bản chất toán học & cách giải khác
@@ -2254,7 +1878,6 @@ export async function gradeWithProviderTriplePass(
   const providerNames: Record<AIProvider, string> = {
     openrouter: `Qwen (${settings.openrouterModel || 'Qwen 3.8'})`,
     alibabacloud: `Qwen Alibaba (${settings.alibabacloudModel || 'Model Studio'})`,
-    claude: `Claude (${settings.claudeModel || 'Opus 5'})`,
     gemini: `Gemini (${settings.geminiModel || '3.8 Flash'})`,
     openai: `OpenAI (${settings.openaiModel || 'GPT-4o'})`,
   };
@@ -2283,8 +1906,6 @@ export async function gradeWithProviderTriplePass(
         ocrRes = await transcribeImageWithOpenRouter(submission.images, submission.studentName, settings, apiKey, backupApiKey);
       } else if (provider === 'alibabacloud') {
         ocrRes = await transcribeImageWithAlibabaCloud(submission.images, submission.studentName, settings, apiKey, backupApiKey);
-      } else if (provider === 'claude') {
-        ocrRes = await transcribeImageWithClaude(submission.images, submission.studentName, settings, apiKey, backupApiKey);
       } else if (provider === 'gemini') {
         ocrRes = await transcribeImageWithGemini(submission.images, submission.studentName, settings, apiKey, backupApiKey);
       } else if (provider === 'openai') {
@@ -2309,8 +1930,6 @@ export async function gradeWithProviderTriplePass(
         return gradeWithOpenRouterCustomPrompt(p, submission, rubric, settings, apiKey, backupApiKey, temp, true);
       case 'alibabacloud':
         return gradeWithAlibabaCloudCustomPrompt(p, submission, rubric, settings, apiKey, backupApiKey, temp);
-      case 'claude':
-        return gradeWithClaudeCustomPrompt(p, submission, rubric, settings, apiKey, backupApiKey, temp);
       case 'gemini':
         return gradeWithGeminiCustomPrompt(p, submission, rubric, settings, apiKey, backupApiKey, temp);
       case 'openai':
@@ -2478,19 +2097,6 @@ export async function gradeWithProviderTriplePass(
   finalGradingResult.consensusReport = consensusReport;
 
   return { gradingResult: finalGradingResult, consensusReport };
-}
-
-/**
- * Backward compatibility wrapper for Claude Triple-Pass
- */
-export async function gradeWithClaudeTriplePass(
-  submission: StudentSubmission,
-  rubric: RubricData,
-  settings: TeacherSettings,
-  apiKey: string,
-  backupApiKey?: string
-): Promise<{ gradingResult: GradingResult; consensusReport: ConsensusReport }> {
-  return gradeWithProviderTriplePass('claude', submission, rubric, settings, apiKey, backupApiKey);
 }
 
 
@@ -2927,7 +2533,7 @@ export async function gradeWithProvider(
   resolvedApiKey: string,
   backupApiKey?: string
 ): Promise<{ gradingResult: GradingResult; provider: AIProvider; modelUsed: string }> {
-  const provider = settings.provider || 'claude';
+  const provider = settings.provider || 'openrouter';
 
   // 0. Ensure high-fidelity math OCR transcription exists if submission has images
   const isPureText = !/vl/i.test(
@@ -2967,7 +2573,6 @@ export async function gradeWithProvider(
       } else {
         const ocrKeys = {
           gemini: provider === 'gemini' ? resolvedApiKey : undefined,
-          claude: provider === 'claude' ? resolvedApiKey : undefined,
           openai: provider === 'openai' ? resolvedApiKey : undefined,
           openrouter: provider === 'openrouter' ? resolvedApiKey : undefined,
           alibabacloud: provider === 'alibabacloud' ? resolvedApiKey : undefined,
@@ -3013,19 +2618,6 @@ export async function gradeWithProvider(
         gradingResult.ocrComparison = submission.ocrComparison;
       }
       return { gradingResult, provider: 'openrouter', modelUsed };
-    }
-    case 'claude': {
-      const { gradingResult, modelUsed } = await gradeWithClaude(
-        submission,
-        rubric,
-        settings,
-        resolvedApiKey,
-        backupApiKey
-      );
-      if (submission.ocrComparison && !gradingResult.ocrComparison) {
-        gradingResult.ocrComparison = submission.ocrComparison;
-      }
-      return { gradingResult, provider: 'claude', modelUsed };
     }
     case 'openai': {
       const { gradingResult, modelUsed } = await gradeWithOpenAI(
@@ -3092,7 +2684,7 @@ export function toModelEvaluation(
 }
 
 /**
- * Grade using AI models (Gemini, Claude, OpenAI, Qwen/OpenRouter) simultaneously with the same prompt,
+ * Grade using AI models (Gemini, OpenAI, Qwen/OpenRouter) simultaneously with the same prompt,
  * cross-check results against each other, and automatically re-grade if scores diverge.
  */
 export async function gradeWithThreeModelsAndConsensus(
@@ -3101,14 +2693,12 @@ export async function gradeWithThreeModelsAndConsensus(
   settings: TeacherSettings,
   apiKeys: {
     gemini?: string;
-    claude?: string;
     openai?: string;
     openrouter?: string;
     alibabacloud?: string;
   },
   backupKeys?: {
     gemini?: string;
-    claude?: string;
     openai?: string;
     openrouter?: string;
     alibabacloud?: string;
@@ -3168,26 +2758,7 @@ export async function gradeWithThreeModelsAndConsensus(
       });
     }
 
-    // 2. Anthropic Claude
-    if (apiKeys.claude) {
-      tasks.push({
-        provider: 'Anthropic Claude',
-        promise: gradeWithClaude(submission, rubric, settings, apiKeys.claude, backupKeys?.claude).then(
-          ({ gradingResult, modelUsed, reasoning }) => {
-            if (reasoning && !gradingResult.reasoningText) {
-              gradingResult.reasoningText = reasoning;
-            }
-            return {
-              provider: 'claude' as AIProvider,
-              result: gradingResult,
-              model: modelUsed,
-            };
-          }
-        ),
-      });
-    }
-
-    // 3. OpenAI GPT - Có tự động dự phòng sang OpenRouter / Gemini nếu OpenAI hết hạn mức
+    // 2. OpenAI GPT - Có tự động dự phòng sang OpenRouter / Gemini nếu OpenAI hết hạn mức
     if (apiKeys.openai) {
       tasks.push({
         provider: 'OpenAI (GPT-4o)',
@@ -3322,7 +2893,7 @@ export async function gradeWithThreeModelsAndConsensus(
 
     if (tasks.length === 0) {
       throw new Error(
-        'Chưa cấu hình API Key nào (Gemini, Claude, OpenAI, OpenRouter hoặc Alibaba Cloud) để thực hiện đối chiếu.'
+        'Chưa cấu hình API Key nào (OpenRouter, Gemini, OpenAI hoặc Alibaba Cloud) để thực hiện đối chiếu.'
       );
     }
 

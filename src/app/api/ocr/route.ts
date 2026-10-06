@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { StudentSubmission, TeacherSettings } from '@/types/grading';
-import { transcribeWithThreeModelsAndConsensus, resolveClaudeEndpoint } from '@/utils/aiGrading';
+import { transcribeWithThreeModelsAndConsensus } from '@/utils/aiGrading';
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,32 +24,27 @@ export async function POST(req: NextRequest) {
 
     const effectiveSettings: TeacherSettings = {
       ...(settings || {}),
-      claudeBaseUrl: resolveClaudeEndpoint(settings?.claudeBaseUrl),
     };
 
     // Retrieve API keys from server env
     const envGemini = (process.env.GEMINI_API_KEY || '').trim();
-    const envClaude = (process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '').trim();
     const envOpenai = (process.env.OPENAI_API_KEY || '').trim();
     const envOpenrouter = (process.env.OPENROUTER_API_KEY || '').trim();
     const envAlibaba = (process.env.ALIBABACLOUD_API_KEY || '').trim();
 
     // Client provided keys
     const clientGemini = (req.headers.get('x-gemini-api-key') || settings?.geminiApiKey || '').trim();
-    const clientClaude = (req.headers.get('x-claude-api-key') || settings?.claudeApiKey || '').trim();
     const clientOpenai = (req.headers.get('x-openai-api-key') || settings?.openaiApiKey || '').trim();
     const clientOpenrouter = (req.headers.get('x-openrouter-api-key') || settings?.openrouterApiKey || '').trim();
     const clientAlibaba = (req.headers.get('x-alibabacloud-api-key') || settings?.alibabacloudApiKey || '').trim();
 
     const geminiKey = clientGemini || envGemini;
-    const claudeKey = clientClaude || envClaude;
     const openaiKey = clientOpenai || envOpenai;
     const openrouterKey = clientOpenrouter || envOpenrouter;
     const alibabaKey = clientAlibaba || envAlibaba;
 
     const availableKeys = {
       gemini: geminiKey,
-      claude: claudeKey,
       openai: openaiKey,
       openrouter: openrouterKey,
       alibabacloud: alibabaKey,
@@ -60,7 +55,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            'Chưa cấu hình API Key nào trong Cài Đặt hoặc .env.local (cần ít nhất API Key của Gemini, Claude, OpenAI, OpenRouter hoặc Alibaba Cloud để đọc ảnh).',
+            'Chưa cấu hình API Key nào trong Cài Đặt hoặc .env.local (cần ít nhất API Key của OpenRouter, Gemini, OpenAI hoặc Alibaba Cloud để đọc ảnh).',
         },
         { status: 400 }
       );
@@ -68,7 +63,6 @@ export async function POST(req: NextRequest) {
 
     const backupKeys = {
       gemini: envGemini && envGemini !== clientGemini ? envGemini : undefined,
-      claude: envClaude && envClaude !== clientClaude ? envClaude : undefined,
       openai: envOpenai && envOpenai !== clientOpenai ? envOpenai : undefined,
       openrouter: envOpenrouter && envOpenrouter !== clientOpenrouter ? envOpenrouter : undefined,
       alibabacloud: envAlibaba && envAlibaba !== clientAlibaba ? envAlibaba : undefined,

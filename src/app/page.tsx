@@ -65,9 +65,6 @@ const DEFAULT_SETTINGS: TeacherSettings = {
   consensusTolerance: 0.25,
   geminiApiKey: '',
   geminiModel: 'gemini-3.8-flash',
-  claudeApiKey: '',
-  claudeModel: 'claude-opus-5',
-  claudeBaseUrl: 'https://apikey.pimath.id.vn/v1',
   openaiApiKey: '',
   openaiModel: 'gpt-4o',
   openaiBaseUrl: 'https://api.openai.com/v1',
@@ -78,10 +75,9 @@ const DEFAULT_SETTINGS: TeacherSettings = {
   alibabacloudApiKey: '',
   alibabacloudModel: 'qwen-plus-character',
   alibabacloudBaseUrl: 'https://ws-oxwvfx79avt7ebq3.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1',
-  model: 'gemini-3.8-flash',
+  model: 'qwen/qwen3.8-27b',
   modelPasses: {
     gemini: 1,
-    claude: 1,
     openai: 1,
     openrouter: 1,
     alibabacloud: 1,
@@ -108,26 +104,9 @@ export default function Home() {
           parsed.model = 'gemini-3.8-flash';
         }
 
-        // Auto migrate legacy 404 Claude models
-        const legacyClaudeModels = [
-          'claude-3-7-sonnet-20250219',
-          'claude-3-5-sonnet-20241022',
-          'claude-3-5-haiku-20241022',
-          'claude-3-opus-20240229',
-        ];
-        let claudeModel = parsed.claudeModel || DEFAULT_SETTINGS.claudeModel;
-        if (legacyClaudeModels.includes(claudeModel) || claudeModel === 'claude-haiku-4-5-20251001') {
-          claudeModel = 'claude-opus-5';
-        }
-
-        let claudeBaseUrl = parsed.claudeBaseUrl || DEFAULT_SETTINGS.claudeBaseUrl;
-        if (!claudeBaseUrl || claudeBaseUrl === 'https://api.anthropic.com/v1' || claudeBaseUrl.includes('claudecode.pimath.id.vn')) {
-          claudeBaseUrl = 'https://apikey.pimath.id.vn/v1';
-        }
-
         // Mặc định luôn là single_pass (Chấm 1 lần nhanh) nếu người dùng chưa chủ động đổi sang chế độ khác
         let gradingMode = parsed.gradingMode;
-        if (!gradingMode || !parsed._gradingModeExplicitlySet) {
+        if (!gradingMode || !parsed._gradingModeExplicitlySet || (gradingMode !== 'single_pass' && gradingMode !== 'triple_consensus')) {
           gradingMode = 'single_pass';
         }
 
@@ -161,10 +140,8 @@ export default function Home() {
           maxRegradeRetries: parsed.maxRegradeRetries ?? 2,
           provider: 'openrouter',
           geminiModel: parsed.geminiModel || parsed.model || DEFAULT_SETTINGS.geminiModel,
-          claudeModel,
           openaiModel: parsed.openaiModel || DEFAULT_SETTINGS.openaiModel,
           openrouterModel,
-          claudeBaseUrl,
           openaiBaseUrl: parsed.openaiBaseUrl || DEFAULT_SETTINGS.openaiBaseUrl,
           openrouterBaseUrl: parsed.openrouterBaseUrl || DEFAULT_SETTINGS.openrouterBaseUrl,
           openrouterReasoning: parsed.openrouterReasoning !== false,
@@ -174,7 +151,6 @@ export default function Home() {
           alibabacloudApiKey: parsed.alibabacloudApiKey || '',
           modelPasses: {
             gemini: parsed.modelPasses?.gemini ?? 1,
-            claude: parsed.modelPasses?.claude ?? 1,
             openai: parsed.modelPasses?.openai ?? 1,
             openrouter: parsed.modelPasses?.openrouter ?? 1,
             alibabacloud: parsed.modelPasses?.alibabacloud ?? 1,

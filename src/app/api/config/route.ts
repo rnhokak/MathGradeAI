@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import {
-  SUPPORTED_CLAUDE_MODELS,
   SUPPORTED_GEMINI_MODELS,
   SUPPORTED_OPENAI_MODELS,
   SUPPORTED_OPENROUTER_MODELS,
@@ -16,17 +15,7 @@ export async function GET() {
     const globalVisible = parseModelEnvList(process.env.VISIBLE_MODELS || process.env.NEXT_PUBLIC_VISIBLE_MODELS);
     const globalHidden = parseModelEnvList(process.env.HIDDEN_MODELS || process.env.NEXT_PUBLIC_HIDDEN_MODELS);
 
-    // 2. Claude visibility
-    const claudeVisible = parseModelEnvList(
-      process.env.CLAUDE_VISIBLE_MODELS || process.env.NEXT_PUBLIC_CLAUDE_VISIBLE_MODELS
-    ) || globalVisible;
-    const claudeHidden = [
-      ...(parseModelEnvList(process.env.CLAUDE_HIDDEN_MODELS || process.env.NEXT_PUBLIC_CLAUDE_HIDDEN_MODELS) || []),
-      ...(globalHidden || []),
-    ];
-    const claudeModels = filterModels(SUPPORTED_CLAUDE_MODELS, claudeVisible, claudeHidden);
-
-    // 3. Gemini visibility
+    // 2. Gemini visibility
     const geminiVisible = parseModelEnvList(
       process.env.GEMINI_VISIBLE_MODELS || process.env.NEXT_PUBLIC_GEMINI_VISIBLE_MODELS
     ) || globalVisible;
@@ -36,7 +25,7 @@ export async function GET() {
     ];
     const geminiModels = filterModels(SUPPORTED_GEMINI_MODELS, geminiVisible, geminiHidden);
 
-    // 4. OpenAI visibility
+    // 3. OpenAI visibility
     const openaiVisible = parseModelEnvList(
       process.env.OPENAI_VISIBLE_MODELS || process.env.NEXT_PUBLIC_OPENAI_VISIBLE_MODELS
     ) || globalVisible;
@@ -46,7 +35,7 @@ export async function GET() {
     ];
     const openaiModels = filterModels(SUPPORTED_OPENAI_MODELS, openaiVisible, openaiHidden);
 
-    // 5. OpenRouter visibility
+    // 4. OpenRouter visibility
     const openrouterVisible = parseModelEnvList(
       process.env.OPENROUTER_VISIBLE_MODELS || process.env.NEXT_PUBLIC_OPENROUTER_VISIBLE_MODELS
     ) || globalVisible;
@@ -58,12 +47,6 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      claude: {
-        models: claudeModels,
-        defaultModel: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
-        baseUrl: process.env.CLAUDE_BASE_URL || 'https://apikey.pimath.id.vn/v1',
-        hasServerKey: Boolean(process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY),
-      },
       gemini: {
         models: geminiModels,
         defaultModel: process.env.GEMINI_MODEL || 'gemini-3.8-flash',

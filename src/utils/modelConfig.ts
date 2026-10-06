@@ -9,47 +9,6 @@ export interface ModelOption {
   provider: AIProvider;
 }
 
-/**
- * Các mô hình Claude được hỗ trợ theo tài liệu Anthropic Messages API (Host: apikey.pimath.id.vn)
- * Chỉ dùng các model Claude này (không phân biệt hoa thường). Model khác sẽ trả về 400 invalid_request_error.
- */
-export const SUPPORTED_CLAUDE_MODELS: ModelOption[] = [
-  {
-    id: 'claude-sonnet-4-6',
-    name: 'Claude Sonnet 4.6',
-    description: 'Sonnet cân bằng - Chuẩn xác, chi tiết & nhận diện chữ viết tay tốt nhất',
-    recommended: true,
-    badge: 'Khuyên dùng',
-    provider: 'claude',
-  },
-  {
-    id: 'claude-opus-5',
-    name: 'Claude Opus 5',
-    description: 'Opus mạnh nhất - Lập luận & Suy luận toán học chuyên sâu đỉnh cao',
-    badge: 'Mạnh nhất',
-    provider: 'claude',
-  },
-  {
-    id: 'claude-opus-4-8',
-    name: 'Claude Opus 4.8',
-    description: 'Opus - Khả năng đối chiếu & lập luận toán học chuyên sâu cực cao',
-    badge: 'Hiệu năng cao',
-    provider: 'claude',
-  },
-  {
-    id: 'claude-opus-4-7',
-    name: 'Claude Opus 4.7',
-    description: 'Opus - Suy luận toán học mạnh mẽ, đối chiếu tiêu chí chặt chẽ',
-    provider: 'claude',
-  },
-  {
-    id: 'claude-haiku-4-5',
-    name: 'Claude Haiku 4.5',
-    description: 'Haiku nhanh / nhẹ - Tốc độ cao & Tiết kiệm chi phí',
-    badge: 'Nhanh nhẹ',
-    provider: 'claude',
-  },
-];
 
 export const SUPPORTED_GEMINI_MODELS: ModelOption[] = [
   {

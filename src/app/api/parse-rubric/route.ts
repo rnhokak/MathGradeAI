@@ -3,7 +3,6 @@ import { parseDocx } from '@/utils/docxParser';
 import {
   parseRubricFromTablesAndText,
   parseRubricWithGemini,
-  parseRubricWithClaude,
   parseRubricWithOpenAI,
   parseRubricWithOpenRouter,
   parseRubricWithAlibabaCloud,
@@ -42,34 +41,10 @@ export async function POST(req: NextRequest) {
       bodyBaseUrl = body.baseUrl || '';
     }
 
-    const provider = req.headers.get('x-ai-provider') || bodyProvider || 'claude';
+    const provider = req.headers.get('x-ai-provider') || bodyProvider || 'openrouter';
 
     // 1. Try AI parsing with selected provider
-    if (provider === 'claude') {
-      const claudeKey = (
-        req.headers.get('x-claude-api-key') ||
-        process.env.ANTHROPIC_API_KEY ||
-        process.env.CLAUDE_API_KEY ||
-        ''
-      ).trim();
-      const claudeModel = req.headers.get('x-claude-model') || bodyModel || process.env.CLAUDE_MODEL || 'claude-opus-5';
-      const claudeBaseUrl = req.headers.get('x-claude-base-url') || bodyBaseUrl || process.env.CLAUDE_BASE_URL || 'https://apikey.pimath.id.vn/v1';
-
-      if (claudeKey) {
-        try {
-          const aiRubric = await parseRubricWithClaude(text, tables, fileName, claudeKey, claudeModel, claudeBaseUrl);
-          if (aiRubric.criteria && aiRubric.criteria.length > 0) {
-            return NextResponse.json({
-              success: true,
-              rubric: aiRubric,
-              mode: 'claude',
-            });
-          }
-        } catch (aiErr: any) {
-          console.error('Claude rubric parsing failed, falling back to smart heuristic:', aiErr);
-        }
-      }
-    } else if (provider === 'alibabacloud') {
+    if (provider === 'alibabacloud') {
       const alibabaKey = (
         req.headers.get('x-alibabacloud-api-key') ||
         process.env.ALIBABACLOUD_API_KEY ||

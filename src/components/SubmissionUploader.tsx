@@ -167,17 +167,18 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
   // Bước 2: Chấm bài bằng AI bằng văn bản đã qua OCR
   const gradeSingleSubmission = async (sub: StudentSubmission) => {
     setActiveSubId(sub.id);
-    const mode = settings.gradingMode || 'triple_pass';
-    const isTriple = mode === 'triple_consensus';
+    const mode = settings.gradingMode || 'single_pass';
     const provider = settings.provider || 'openrouter';
-    const passes = settings.gradingPasses ?? (settings.modelPasses?.[provider] ?? 1);
+    const isTriple = provider !== 'openrouter' && mode === 'triple_consensus';
+    const passes = (provider === 'openrouter' && mode === 'triple_consensus')
+      ? 3
+      : (settings.gradingPasses ?? (settings.modelPasses?.[provider] ?? 1));
     const ocrPasses = settings.ocrPasses ?? 3;
     const hasImages = sub.images && sub.images.length > 0;
 
     const providerDisplayNames: Record<string, string> = {
       openrouter: `Qwen (${settings.openrouterModel || '3.8 27B'})`,
       alibabacloud: `Qwen (${settings.alibabacloudModel || 'Alibaba'})`,
-      claude: settings.claudeModel || 'Claude Opus 5',
       openai: settings.openaiModel || 'GPT-4o',
       gemini: settings.geminiModel || 'Gemini 3.8',
     };
@@ -220,7 +221,6 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
             headers: {
               'Content-Type': 'application/json',
               ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
-              ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
               ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
               ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
               ...(settings.alibabacloudApiKey ? { 'x-alibabacloud-api-key': settings.alibabacloudApiKey } : {}),
@@ -304,7 +304,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
     // BƯỚC 2: CHẤM BÀI BẰNG AI (SỬ DỤNG BẢN ĐÃ QUA OCR VÀ VERIFY)
     // =========================================================================
     const gradeBaseMessage = isTriple
-      ? 'Bước 2/2: Đang chấm đồng thời 3 Model (Gemini, Claude, GPT-4o)...'
+      ? 'Bước 2/2: Đang chấm đồng thời 3 Model (Gemini, OpenRouter, GPT-4o)...'
       : passes === 3
       ? `Bước 2/2: Đang chấm 3 lần bằng ${activeModelName} (Barem + Soi lỗi + Sư phạm)...`
       : `Bước 2/2: Đang chấm nhanh bằng ${activeModelName}...`;
@@ -335,7 +335,6 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
           headers: {
             'Content-Type': 'application/json',
             ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
-            ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
             ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
             ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
             ...(settings.alibabacloudApiKey ? { 'x-alibabacloud-api-key': settings.alibabacloudApiKey } : {}),
@@ -445,7 +444,6 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
           headers: {
             'Content-Type': 'application/json',
             ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
-            ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
             ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
             ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
             ...(settings.alibabacloudApiKey ? { 'x-alibabacloud-api-key': settings.alibabacloudApiKey } : {}),
@@ -681,18 +679,18 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
   const pendingCount = displaySubmissions.filter(
     (s) => s.status === 'idle' || s.status === 'error' || s.status === 'queued'
   ).length;
-  const mode = settings.gradingMode || 'triple_pass';
-  const isTripleMode = mode === 'triple_consensus';
+  const mode = settings.gradingMode || 'single_pass';
   const activeProvider = settings.provider || 'openrouter';
-  const activePasses = settings.gradingPasses ?? (settings.modelPasses?.[activeProvider] ?? 1);
+  const isTripleMode = activeProvider !== 'openrouter' && mode === 'triple_consensus';
+  const activePasses = (activeProvider === 'openrouter' && mode === 'triple_consensus')
+    ? 3
+    : (settings.gradingPasses ?? (settings.modelPasses?.[activeProvider] ?? 1));
   const activeOcrPasses = settings.ocrPasses ?? 3;
   const activeModelTitle =
     activeProvider === 'openrouter'
       ? `Qwen (${settings.openrouterModel || '3.8 27B'})`
       : activeProvider === 'alibabacloud'
       ? `Qwen (${settings.alibabacloudModel || 'Alibaba'})`
-      : activeProvider === 'claude'
-      ? (settings.claudeModel || 'Claude Opus 5')
       : activeProvider === 'openai'
       ? (settings.openaiModel || 'GPT-4o')
       : (settings.geminiModel || 'Gemini 3.8');
@@ -732,7 +730,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
               ➔ Chuyển bài đã số hóa sang{' '}
               <strong style={{ color: isTripleMode ? '#818cf8' : activePasses === 3 ? '#fbbf24' : '#34d399' }}>
                 {isTripleMode
-                  ? 'Chấm đối chiếu 3 Model AI (Gemini + Claude + GPT-4o)'
+                  ? 'Chấm đối chiếu 3 Model AI (Gemini + OpenRouter + GPT-4o)'
                   : activePasses === 3
                   ? `Chấm 3 Lần Triple-Pass bằng ${activeModelTitle} (Barem + Soi lỗi + Sư phạm)`
                   : `Chấm 1 Lần Nhanh bằng ${activeModelTitle}`}
@@ -1149,9 +1147,10 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                         {/* Consensus Badge */}
                         {consensus ? (
                           (() => {
-                            const isClaudeTriple =
-                              consensus.evaluations.length > 0 &&
-                              consensus.evaluations.every((e) => e.provider === 'claude');
+                            const isSingleTriple =
+                              consensus.evaluations.length > 1 &&
+                              consensus.evaluations.every((e) => e.provider === consensus.evaluations[0]?.provider);
+                            const providerName = consensus.evaluations[0]?.provider?.toUpperCase() || 'AI';
 
                             if (consensus.status === 'single_model') {
                               return (
@@ -1160,7 +1159,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                                   title={consensus.summary}
                                   style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
                                 >
-                                  <AlertCircle size={12} /> {isClaudeTriple ? 'Chỉ 1 lượt Claude' : `Chỉ 1 Model (${consensus.evaluations[0]?.provider?.toUpperCase() || 'AI'})`}
+                                  <AlertCircle size={12} /> {isSingleTriple ? `Chỉ 1 lượt ${providerName}` : `Chỉ 1 Model (${providerName})`}
                                 </span>
                               );
                             }
@@ -1171,7 +1170,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                                   title={consensus.summary}
                                   style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
                                 >
-                                  <CheckCircle2 size={12} /> {isClaudeTriple ? 'Đồng thuận 3 lần Claude' : 'Đồng thuận 3/3 Model'}
+                                  <CheckCircle2 size={12} /> {isSingleTriple ? `Đồng thuận 3 lần ${providerName}` : 'Đồng thuận 3/3 Model'}
                                 </span>
                               );
                             }
@@ -1182,7 +1181,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                                   title={consensus.summary}
                                   style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
                                 >
-                                  <Layers size={12} /> {isClaudeTriple ? 'Đồng thuận đa số (Claude)' : `Đồng thuận ${consensus.evaluations.length >= 3 ? 'đa số (2/3)' : '2 Model'}`} (Lệch {consensus.scoreDifference}đ)
+                                  <Layers size={12} /> {isSingleTriple ? `Đồng thuận đa số (${providerName})` : `Đồng thuận ${consensus.evaluations.length >= 3 ? 'đa số (2/3)' : '2 Model'}`} (Lệch {consensus.scoreDifference}đ)
                                 </span>
                               );
                             }
@@ -1193,7 +1192,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                                   title={consensus.summary}
                                   style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
                                 >
-                                  <RefreshCw size={12} /> {isClaudeTriple ? 'Hội đồng Claude tổng hợp' : `Đã chấm lại ${consensus.regradeCount} lần`}
+                                  <RefreshCw size={12} /> {isSingleTriple ? `Hội đồng ${providerName} tổng hợp` : `Đã chấm lại ${consensus.regradeCount} lần`}
                                 </span>
                               );
                             }
@@ -1203,7 +1202,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                                 title={consensus.summary}
                                 style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px' }}
                               >
-                                <AlertCircle size={12} /> {isClaudeTriple ? `Claude lệch ${consensus.scoreDifference}đ (Đã phân xử)` : `Chênh lệch ${consensus.scoreDifference}đ`}
+                                <AlertCircle size={12} /> {isSingleTriple ? `${providerName} lệch ${consensus.scoreDifference}đ (Đã phân xử)` : `Chênh lệch ${consensus.scoreDifference}đ`}
                               </span>
                             );
                           })()

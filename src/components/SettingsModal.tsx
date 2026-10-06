@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { SUPPORTED_CLAUDE_MODELS, ModelOption } from '@/utils/modelConfig';
+import { ModelOption } from '@/utils/modelConfig';
 import {
   X,
   Key,
@@ -45,14 +45,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     maxRegradeRetries: settings.maxRegradeRetries ?? 2,
     consensusTolerance: settings.consensusTolerance ?? 0.25,
     geminiModel: settings.geminiModel || settings.model || 'gemini-3.8-flash',
-    claudeModel: settings.claudeModel || 'claude-opus-5',
     openaiModel: settings.openaiModel || 'gpt-4o',
-    claudeBaseUrl:
-      !settings.claudeBaseUrl ||
-      settings.claudeBaseUrl === 'https://api.anthropic.com/v1' ||
-      settings.claudeBaseUrl.includes('claudecode.pimath.id.vn')
-        ? 'https://apikey.pimath.id.vn/v1'
-        : settings.claudeBaseUrl,
     openaiBaseUrl: settings.openaiBaseUrl || 'https://api.openai.com/v1',
     openrouterModel: settings.openrouterModel || 'qwen/qwen3.8-27b',
     openrouterBaseUrl: settings.openrouterBaseUrl || 'https://openrouter.ai/api/v1',
@@ -65,7 +58,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     alibabacloudApiKey: settings.alibabacloudApiKey || '',
     modelPasses: {
       gemini: settings.modelPasses?.gemini ?? 1,
-      claude: settings.modelPasses?.claude ?? 1,
       openai: settings.modelPasses?.openai ?? 1,
       openrouter: settings.modelPasses?.openrouter ?? 1,
       alibabacloud: settings.modelPasses?.alibabacloud ?? 1,
@@ -73,23 +65,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   });
 
   const [showGeminiKey, setShowGeminiKey] = useState(false);
-  const [showClaudeKey, setShowClaudeKey] = useState(false);
   const [showOpenAIKey, setShowOpenAIKey] = useState(false);
   const [showOpenRouterKey, setShowOpenRouterKey] = useState(false);
   const [showAlibabaCloudKey, setShowAlibabaCloudKey] = useState(false);
 
-  const [claudeModels, setClaudeModels] = useState<ModelOption[]>(SUPPORTED_CLAUDE_MODELS);
-
   useEffect(() => {
     if (!isOpen) return;
-    fetch('/api/config')
-      .then((res) => res.json())
-      .then((cfg) => {
-        if (cfg.success && cfg.claude?.models?.length > 0) {
-          setClaudeModels(cfg.claude.models);
-        }
-      })
-      .catch((err) => console.warn('Không thể tải cấu hình models từ server:', err));
   }, [isOpen]);
 
   // Custom model flags
@@ -97,20 +78,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     !['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-2.5-pro'].includes(
       current.geminiModel
     )
-  );
-  const [isCustomClaude, setIsCustomClaude] = useState(
-    ![
-      'claude-sonnet-4-6',
-      'claude-opus-5',
-      'claude-opus-4-8',
-      'claude-opus-4-7',
-      'claude-haiku-4-5',
-      'claude-haiku-4-5-20251001',
-      'claude-opus-4-6',
-      'claude-sonnet-5',
-      'claude-sonnet-4-5-20250929',
-      'claude-opus-4-5-20251101',
-    ].includes(current.claudeModel)
   );
   const [isCustomOpenAI, setIsCustomOpenAI] = useState(
     !['gpt-4o', 'gpt-4o-mini', 'o3-mini', 'o1', 'gpt-4-turbo'].includes(current.openaiModel)
@@ -139,7 +106,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   );
 
   const renderPassSelector = (
-    providerKey: 'gemini' | 'claude' | 'openai' | 'openrouter' | 'alibabacloud',
+    providerKey: 'gemini' | 'openai' | 'openrouter' | 'alibabacloud',
     modelLabel: string
   ) => {
     const currentPasses = current.modelPasses?.[providerKey] ?? 3;
@@ -556,7 +523,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
 
             {/* Sub-settings for Queue & Consensus */}
-            {(current.gradingMode === 'triple_consensus' || current.gradingMode === 'claude_triple_pass') && (
+            {current.gradingMode === 'triple_consensus' && (
               <div
                 style={{
                   marginTop: '12px',

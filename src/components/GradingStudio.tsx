@@ -64,7 +64,7 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
   const [isEditingText, setIsEditingText] = useState(false);
   const [isReGrading, setIsReGrading] = useState(false);
   const [isReRunningOcr, setIsReRunningOcr] = useState(false);
-  const [selectedOcrModelTab, setSelectedOcrModelTab] = useState<'consensus' | 'gemini' | 'claude' | 'openai' | 'openrouter'>('consensus');
+  const [selectedOcrModelTab, setSelectedOcrModelTab] = useState<'consensus' | 'gemini' | 'openai' | 'openrouter'>('consensus');
 
   if (!result) {
     return (
@@ -99,7 +99,6 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
           headers: {
             'Content-Type': 'application/json',
             ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
-            ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
             ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
             ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
             ...(settings.alibabacloudApiKey ? { 'x-alibabacloud-api-key': settings.alibabacloudApiKey } : {}),
@@ -147,7 +146,6 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
           headers: {
             'Content-Type': 'application/json',
             ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
-            ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
             ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
             ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
             ...(settings.alibabacloudApiKey ? { 'x-alibabacloud-api-key': settings.alibabacloudApiKey } : {}),
@@ -752,8 +750,6 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                         >
                           {r.provider === 'gemini'
                             ? `Gemini (${r.modelName})`
-                            : r.provider === 'claude'
-                            ? `Claude (${r.modelName})`
                             : r.provider === 'openrouter'
                             ? `Qwen (${r.modelName.replace(/^qwen\//i, '')})`
                             : `OpenAI (${r.modelName})`}
@@ -810,7 +806,7 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                       Chưa có báo cáo đối chiếu OCR 3 Model cho bài làm này.
                     </p>
                     <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                      Hệ thống sẽ chạy đồng thời Gemini, Claude và GPT-4o để so sánh từng công thức toán học.
+                      Hệ thống sẽ chạy đồng thời các model AI (Gemini, Qwen/OpenRouter, GPT-4o) để so sánh từng công thức toán học.
                     </p>
                     <button
                       type="button"
@@ -880,7 +876,7 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
             )}
           </div>
 
-          {/* BẢNG ĐỐI CHIẾU 3 MODEL AI HOẶC 3 LẦN CHẤM CỦA MODEL (QWEN, CLAUDE, GEMINI, OPENAI) */}
+          {/* BẢNG ĐỐI CHIẾU 3 MODEL AI HOẶC 3 LẦN CHẤM CỦA MODEL (QWEN, GEMINI, OPENAI) */}
           {result.consensusReport && (() => {
             const isSingleModelTriple =
               result.consensusReport.evaluations.length > 0 &&
@@ -891,16 +887,13 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
               ? result.consensusReport.evaluations[0]?.provider
               : null;
             const singleProviderDisplayName =
-              singleProvider === 'claude'
-                ? 'Claude'
-                : singleProvider === 'openrouter' || singleProvider === 'alibabacloud'
+              singleProvider === 'openrouter' || singleProvider === 'alibabacloud'
                 ? 'Qwen'
                 : singleProvider === 'gemini'
                 ? 'Gemini'
                 : singleProvider === 'openai'
                 ? 'OpenAI'
                 : 'AI';
-            const isClaudeTriple = singleProvider === 'claude';
 
             return (
               <div
@@ -928,7 +921,7 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                       {isSingleModelTriple
                         ? `Bảng Đối Chiếu Chấm 3 Lần Bằng ${singleProviderDisplayName} (Tối Ưu & Hội Đồng Tổng Hợp)`
                         : result.consensusReport.evaluations.length >= 3
-                        ? 'Bảng Đối Chiếu Điểm 3 Model AI (Gemini + Claude + GPT-4o)'
+                        ? 'Bảng Đối Chiếu Điểm 3 Model AI (Gemini + OpenRouter + GPT-4o)'
                         : result.consensusReport.evaluations.length === 2
                         ? 'Bảng Đối Chiếu Điểm 2 Model AI'
                         : `Bảng Điểm AI — Chỉ 1 Model Hoàn Thành (${result.consensusReport.evaluations[0]?.provider?.toUpperCase() || 'AI'})`}

@@ -129,10 +129,10 @@ Hãy trả về toàn bộ bản phiên âm văn bản và công thức toán h�
  */
 export function buildOcrConsensusPrompt(
   geminiOrList: string | Array<{ label: string; text: string }>,
-  claudeText?: string,
-  openaiText?: string,
+  model2Text?: string,
+  model3Text?: string,
   studentName?: string,
-  qwenText?: string
+  model4Text?: string
 ): string {
   let modelSections = '';
 
@@ -145,18 +145,14 @@ export function buildOcrConsensusPrompt(
       .join('\n\n');
   } else {
     const geminiText = geminiOrList;
-    const model4Section = qwenText
-      ? `\n=== KẾT QUẢ OCR TỪ MODEL (Qwen / OpenRouter / Alibaba Cloud) ===\n${qwenText}\n`
-      : '';
-    modelSections = `=== KẾT QUẢ OCR TỪ MODEL 1 (Google Gemini) ===
-${geminiText || '(Không có kết quả)'}
-
-=== KẾT QUẢ OCR TỪ MODEL 2 (Anthropic Claude) ===
-${claudeText || '(Không có kết quả)'}
-
-=== KẾT QUẢ OCR TỪ MODEL 3 (OpenAI GPT-4o / Model 3) ===
-${openaiText || '(Không có kết quả)'}
-${model4Section}`;
+    modelSections = [
+      geminiText ? `=== KẾT QUẢ OCR TỪ MODEL 1 (Google Gemini) ===\n${geminiText}` : '',
+      model2Text ? `=== KẾT QUẢ OCR TỪ MODEL 2 (Qwen / OpenRouter) ===\n${model2Text}` : '',
+      model3Text ? `=== KẾT QUẢ OCR TỪ MODEL 3 (OpenAI GPT-4o) ===\n${model3Text}` : '',
+      model4Text ? `=== KẾT QUẢ OCR TỪ MODEL 4 ===\n${model4Text}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
   }
 
   return `Bạn là Trọng tài AI chuyên gia thẩm định và đối chiếu văn bản Toán học viết tay.
@@ -332,7 +328,7 @@ Cấu trúc JSON yêu cầu:
 
 /**
  * Generic Prompt for Triple-Pass Grading (Pass 1: Official Rubric, Pass 2: Adversarial Audit, Pass 3: Pedagogical Insight)
- * Supports all AI models: Qwen, Claude, Gemini, OpenAI.
+ * Supports all AI models: Qwen, Gemini, OpenAI.
  */
 export function buildModelTriplePassPrompt(
   pass: 1 | 2 | 3,
@@ -482,28 +478,8 @@ LƯU Ý ĐỊNH DẠNG:
 }
 
 /**
- * Backward compatibility wrapper for Claude Triple-Pass Prompt
- */
-export function buildClaudeTriplePassPrompt(
-  pass: 1 | 2 | 3,
-  rubric: RubricData,
-  studentName: string,
-  settings: TeacherSettings,
-  extractedSubmissionText?: string
-): string {
-  return buildModelTriplePassPrompt(
-    pass,
-    rubric,
-    studentName,
-    settings,
-    extractedSubmissionText,
-    'Claude AI'
-  );
-}
-
-/**
  * Prompt to synthesize the 3 evaluation passes into the definitive, most accurate final result
- * Supports all AI models: Qwen, Claude, Gemini, OpenAI.
+ * Supports all AI models: Qwen, Gemini, OpenAI.
  */
 export function buildModelSynthesisPrompt(
   rubric: RubricData,
@@ -626,25 +602,5 @@ LƯU Ý ĐỊNH DẠNG:
   "teacherComment": "Lời phê trực diện, chân thật, tối đa 1-2 câu của ${teacherName} gửi em ${studentName}."
 }
 `;
-}
-
-/**
- * Backward compatibility wrapper for Claude Synthesis Prompt
- */
-export function buildClaudeSynthesisPrompt(
-  rubric: RubricData,
-  studentName: string,
-  settings: TeacherSettings,
-  passResults: { passNumber: number; perspective: string; result: any }[],
-  extractedSubmissionText?: string
-): string {
-  return buildModelSynthesisPrompt(
-    rubric,
-    studentName,
-    settings,
-    passResults,
-    extractedSubmissionText,
-    'Claude AI'
-  );
 }
 
