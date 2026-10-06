@@ -43,29 +43,129 @@ export async function POST(req: NextRequest) {
     const openrouterKey = clientOpenrouter || envOpenrouter;
     const alibabaKey = clientAlibaba || envAlibaba;
 
-    const availableKeys = {
-      gemini: geminiKey,
-      openai: openaiKey,
-      openrouter: openrouterKey,
-      alibabacloud: alibabaKey,
-    };
+    const provider = effectiveSettings.provider || 'openrouter';
 
-    const keyCount = Object.values(availableKeys).filter(Boolean).length;
-    if (keyCount === 0) {
+    if (provider === 'openrouter') {
+      if (!openrouterKey) {
+        return NextResponse.json(
+          {
+            error:
+              'Chưa cấu hình OpenRouter API Key. Vui lòng bấm vào Cài Đặt (chọn tab OpenRouter) để nhập API Key, hoặc khai báo OPENROUTER_API_KEY trong file .env.local.',
+          },
+          { status: 400 }
+        );
+      }
+
+      const availableKeys = {
+        openrouter: openrouterKey,
+      };
+      const backupKeys = {
+        openrouter: envOpenrouter && envOpenrouter !== clientOpenrouter ? envOpenrouter : undefined,
+      };
+
+      const effectivePasses: 1 | 3 = ocrPasses ?? settings?.ocrPasses ?? 3;
+
+      const { ocrComparison, consensusText } = await transcribeWithThreeModelsAndConsensus(
+        submission,
+        effectiveSettings,
+        availableKeys,
+        backupKeys,
+        effectivePasses
+      );
+
+      return NextResponse.json({
+        success: true,
+        ocrComparison,
+        consensusText,
+      });
+    }
+
+    if (provider === 'alibabacloud') {
+      if (!alibabaKey) {
+        return NextResponse.json(
+          {
+            error:
+              'Chưa cấu hình Alibaba Cloud API Key. Vui lòng bấm vào Cài Đặt để nhập API Key, hoặc khai báo ALIBABACLOUD_API_KEY trong file .env.local.',
+          },
+          { status: 400 }
+        );
+      }
+
+      const availableKeys = {
+        alibabacloud: alibabaKey,
+      };
+      const backupKeys = {
+        alibabacloud: envAlibaba && envAlibaba !== clientAlibaba ? envAlibaba : undefined,
+      };
+
+      const effectivePasses: 1 | 3 = ocrPasses ?? settings?.ocrPasses ?? 3;
+
+      const { ocrComparison, consensusText } = await transcribeWithThreeModelsAndConsensus(
+        submission,
+        effectiveSettings,
+        availableKeys,
+        backupKeys,
+        effectivePasses
+      );
+
+      return NextResponse.json({
+        success: true,
+        ocrComparison,
+        consensusText,
+      });
+    }
+
+    if (provider === 'openai') {
+      if (!openaiKey) {
+        return NextResponse.json(
+          {
+            error:
+              'Chưa cấu hình OpenAI API Key. Vui lòng bấm vào Cài Đặt để nhập API Key, hoặc khai báo OPENAI_API_KEY trong file .env.local.',
+          },
+          { status: 400 }
+        );
+      }
+
+      const availableKeys = {
+        openai: openaiKey,
+      };
+      const backupKeys = {
+        openai: envOpenai && envOpenai !== clientOpenai ? envOpenai : undefined,
+      };
+
+      const effectivePasses: 1 | 3 = ocrPasses ?? settings?.ocrPasses ?? 3;
+
+      const { ocrComparison, consensusText } = await transcribeWithThreeModelsAndConsensus(
+        submission,
+        effectiveSettings,
+        availableKeys,
+        backupKeys,
+        effectivePasses
+      );
+
+      return NextResponse.json({
+        success: true,
+        ocrComparison,
+        consensusText,
+      });
+    }
+
+    // Provider: gemini
+    if (!geminiKey) {
       return NextResponse.json(
         {
           error:
-            'Chưa cấu hình API Key nào trong Cài Đặt hoặc .env.local (cần ít nhất API Key của OpenRouter, Gemini, OpenAI hoặc Alibaba Cloud để đọc ảnh).',
+            'Chưa cấu hình Google Gemini API Key. Vui lòng bấm vào Cài Đặt để nhập API Key, hoặc khai báo GEMINI_API_KEY trong file .env.local.',
         },
         { status: 400 }
       );
     }
 
+    const availableKeys = {
+      gemini: geminiKey,
+    };
     const backupKeys = {
       gemini: envGemini && envGemini !== clientGemini ? envGemini : undefined,
-      openai: envOpenai && envOpenai !== clientOpenai ? envOpenai : undefined,
-      openrouter: envOpenrouter && envOpenrouter !== clientOpenrouter ? envOpenrouter : undefined,
-      alibabacloud: envAlibaba && envAlibaba !== clientAlibaba ? envAlibaba : undefined,
     };
 
     const effectivePasses: 1 | 3 = ocrPasses ?? settings?.ocrPasses ?? 3;
