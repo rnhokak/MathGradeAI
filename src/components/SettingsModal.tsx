@@ -35,10 +35,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const [current, setCurrent] = useState<TeacherSettings>({
     ...settings,
-    provider: settings.provider || 'claude',
+    provider: settings.provider || 'openrouter',
     strictness: settings.strictness || 'strict',
-    gradingMode: settings.gradingMode || 'triple_pass',
-    autoOcrBeforeGrading: settings.autoOcrBeforeGrading ?? false,
+    gradingMode: settings.gradingMode || 'single_pass',
+    autoOcrBeforeGrading: true,
+    ocrPasses: settings.ocrPasses ?? 3,
+    gradingPasses: settings.gradingPasses ?? 1,
     queueDelayMs: settings.queueDelayMs ?? 2000,
     maxRegradeRetries: settings.maxRegradeRetries ?? 2,
     consensusTolerance: settings.consensusTolerance ?? 0.25,
@@ -52,6 +54,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         ? 'https://apikey.pimath.id.vn/v1'
         : settings.claudeBaseUrl,
     openaiBaseUrl: settings.openaiBaseUrl || 'https://api.openai.com/v1',
+    openrouterModel: settings.openrouterModel || 'qwen/qwen3.8-27b',
     openrouterBaseUrl: settings.openrouterBaseUrl || 'https://openrouter.ai/api/v1',
     openrouterReasoning: settings.openrouterReasoning !== false,
     openrouterApiKey: settings.openrouterApiKey || '',
@@ -61,11 +64,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       'https://ws-oxwvfx79avt7ebq3.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1',
     alibabacloudApiKey: settings.alibabacloudApiKey || '',
     modelPasses: {
-      gemini: settings.modelPasses?.gemini ?? 3,
-      claude: settings.modelPasses?.claude ?? 3,
-      openai: settings.modelPasses?.openai ?? 3,
-      openrouter: settings.modelPasses?.openrouter ?? 3,
-      alibabacloud: settings.modelPasses?.alibabacloud ?? 3,
+      gemini: settings.modelPasses?.gemini ?? 1,
+      claude: settings.modelPasses?.claude ?? 1,
+      openai: settings.modelPasses?.openai ?? 1,
+      openrouter: settings.modelPasses?.openrouter ?? 1,
+      alibabacloud: settings.modelPasses?.alibabacloud ?? 1,
     },
   });
 
@@ -114,9 +117,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   );
   const [isCustomOpenRouter, setIsCustomOpenRouter] = useState(
     ![
+      'qwen/qwen3.8-27b',
+      'qwen/qwen3-vl-235b-a22b-instruct',
       'qwen/qwen3.8-flash',
-      'qwen/qwen3.8-27b:free',
-      'qwen/qwen-2.5-vl-72b-instruct:free',
       'qwen/qwen-2.5-vl-72b-instruct',
       'qwen/qwen-2.5-72b-instruct',
       'qwen/qwq-32b-preview',
@@ -398,29 +401,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               Chọn phương thức chấm bài thi tự luận môn Toán.
             </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
-              {/* Option 1: Chấm theo Model Đang Chọn (Tùy chọn 1 lần hoặc 3 lần riêng cho từng model) */}
-              <button
-                type="button"
-                onClick={() => setCurrent({ ...current, gradingMode: 'triple_pass' })}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
+              <div
                 style={{
                   padding: '14px',
                   borderRadius: 'var(--radius-md)',
-                  border:
-                    current.gradingMode !== 'triple_consensus'
-                      ? '2px solid #f59e0b'
-                      : '1px solid var(--border-subtle)',
-                  background:
-                    current.gradingMode !== 'triple_consensus'
-                      ? 'rgba(245, 158, 11, 0.16)'
-                      : 'rgba(255, 255, 255, 0.03)',
+                  border: '2px solid #a855f7',
+                  background: 'rgba(168, 85, 247, 0.15)',
                   textAlign: 'left',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  boxShadow:
-                    current.gradingMode !== 'triple_consensus'
-                      ? '0 0 16px rgba(245, 158, 11, 0.25)'
-                      : 'none',
+                  boxShadow: '0 0 16px rgba(168, 85, 247, 0.25)',
                 }}
               >
                 <div
@@ -432,106 +421,138 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Sparkles size={16} color="#f59e0b" />
+                    <Cpu size={16} color="#c084fc" />
                     <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.88rem' }}>
-                      Chấm Theo Model Đang Chọn
+                      Mô Hình Chấm Bài: Qwen (OpenRouter)
                     </span>
                   </div>
                   <span className="badge badge-amber" style={{ fontSize: '0.65rem', padding: '2px 6px' }}>
-                    Khuyên dùng ⭐
+                    Chuyên gia Toán học ⭐
                   </span>
                 </div>
                 <p style={{ fontSize: '0.74rem', color: '#cbd5e1', lineHeight: 1.4, margin: 0 }}>
-                  Chấm bài bằng mô hình bạn chọn ở các tab bên dưới ({current.provider === 'openrouter' ? 'Qwen OpenRouter' : current.provider === 'alibabacloud' ? 'Qwen Alibaba Cloud' : current.provider === 'claude' ? 'Claude' : current.provider === 'gemini' ? 'Gemini' : 'OpenAI'}). Tự động áp dụng <strong>1 lần nhanh</strong> hoặc <strong>3 lần (Triple-Pass)</strong> theo cài đặt riêng của model đó.
+                  Hệ thống sử dụng bộ đôi mô hình Qwen đỉnh cao của Alibaba trên OpenRouter: <strong>qwen/qwen3-vl-235b-a22b-instruct</strong> (chuyên gia OCR nhận diện công thức ảnh) và <strong>qwen/qwen3.8-27b</strong> (chuyên gia lý luận & chấm bài thi). Hỗ trợ tùy chọn <strong>1 lần nhanh</strong> hoặc <strong>3 lần tư duy sâu (Deep Reasoning CoT)</strong>.
                 </p>
-                <div style={{ marginTop: '8px', fontSize: '0.72rem', color: '#fde68a', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span>Trạng thái: <strong>{current.provider.toUpperCase()}</strong> đang đặt <strong>{current.modelPasses?.[current.provider] === 1 ? 'Chấm 1 lần' : 'Chấm 3 lần (Triple-Pass)'}</strong></span>
+                <div style={{ marginTop: '8px', fontSize: '0.72rem', color: '#e9d5ff', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span>Trạng thái: <strong>QWEN OPENROUTER</strong> đang đặt <strong>{current.gradingPasses === 1 ? 'Chấm 1 lần nhanh' : 'Chấm 3 lần (Tư duy sâu ⭐)'}</strong></span>
                 </div>
-              </button>
-
-              {/* Option 2: 3 Models Consensus */}
-              <button
-                type="button"
-                onClick={() => setCurrent({ ...current, gradingMode: 'triple_consensus' })}
-                style={{
-                  padding: '14px',
-                  borderRadius: 'var(--radius-md)',
-                  border:
-                    current.gradingMode === 'triple_consensus'
-                      ? '2px solid #818cf8'
-                      : '1px solid var(--border-subtle)',
-                  background:
-                    current.gradingMode === 'triple_consensus'
-                      ? 'rgba(99, 102, 241, 0.16)'
-                      : 'rgba(255, 255, 255, 0.03)',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  boxShadow:
-                    current.gradingMode === 'triple_consensus'
-                      ? '0 0 16px rgba(99, 102, 241, 0.25)'
-                      : 'none',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: '6px',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Layers size={16} color="#818cf8" />
-                    <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.88rem' }}>
-                      Đối Chiếu Đa Model
-                    </span>
-                  </div>
-                  <span className="badge badge-indigo" style={{ fontSize: '0.65rem', padding: '2px 6px' }}>
-                    3 AI Khác Nhau
-                  </span>
-                </div>
-                <p style={{ fontSize: '0.74rem', color: '#cbd5e1', lineHeight: 1.4, margin: 0 }}>
-                  Chạy song song <strong>Gemini + Claude + GPT-4o</strong> cùng prompt & rubric. Tự động so sánh chéo kết quả giữa 3 nhà phát triển AI khác nhau.
-                </p>
-                <div style={{ marginTop: '8px', fontSize: '0.72rem', color: '#c7d2fe', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span>Đối chiếu chéo giữa Google, Anthropic và OpenAI</span>
-                </div>
-              </button>
+              </div>
             </div>
 
-            {/* Auto-OCR 3 Model Toggle */}
+            {/* Mandatory 2-Step Pipeline Settings: OCR -> Grading */}
             <div
               style={{
-                marginTop: '14px',
-                padding: '12px 14px',
-                background: 'rgba(99, 102, 241, 0.08)',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid rgba(99, 102, 241, 0.25)',
+                marginTop: '16px',
+                padding: '16px 18px',
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.09), rgba(15, 23, 42, 0.7))',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '12px',
+                flexDirection: 'column',
+                gap: '14px',
               }}
             >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontWeight: 700, fontSize: '0.86rem', color: '#f8fafc' }}>
-                    📐 Tự động đọc & đối chiếu công thức bằng AI OCR trước khi chấm
-                  </span>
-                  <span className="badge badge-emerald" style={{ fontSize: '0.65rem' }}>Khuyên dùng</span>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.92rem', color: '#f8fafc' }}>
+                      ⚡ Quy trình chuẩn 2 bước: Bắt buộc Đọc OCR ảnh trước ➔ Chấm bài bằng AI sau
+                    </span>
+                    <span className="badge badge-emerald" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
+                      Mặc định bắt buộc
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '4px', lineHeight: 1.5 }}>
+                    Hệ thống luôn tự động tách biệt 2 giai đoạn: Bóc tách & đối chiếu công thức viết tay qua OCR trước, sau đó bài đã số hóa chuẩn LaTeX mới được đưa sang chấm điểm. Không chấm trực tiếp ảnh thô để bảo đảm công tâm tuyệt đối.
+                  </p>
                 </div>
-                <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px', lineHeight: 1.4 }}>
-                  Khi bài làm có ảnh viết tay, hệ thống sẽ tự động dùng AI để phiên âm từng dòng chữ, căn thức, số mũ sang LaTeX và đối chiếu nét mực thực tế trước khi chấm.
-                </p>
               </div>
 
-              <input
-                type="checkbox"
-                checked={current.autoOcrBeforeGrading !== false}
-                onChange={(e) => setCurrent({ ...current, autoOcrBeforeGrading: e.target.checked })}
-                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#818cf8', flexShrink: 0 }}
-              />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+                {/* Option 1: OCR Passes */}
+                <div
+                  style={{
+                    padding: '12px 14px',
+                    background: 'rgba(15, 23, 42, 0.65)',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#38bdf8' }}>
+                      1. Số lượt đọc OCR & Verify ảnh:
+                    </span>
+                    <span className="badge badge-indigo" style={{ fontSize: '0.68rem' }}>
+                      {current.ocrPasses === 1 ? '1 Lần Nhanh' : '3 Lần & Verify (Khuyên dùng)'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setCurrent({ ...current, ocrPasses: 3 })}
+                      className={`btn ${current.ocrPasses !== 1 ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ flex: 1, padding: '7px 10px', fontSize: '0.78rem', justifyContent: 'center' }}
+                    >
+                      ⭐ Đọc 3 Lần & Verify
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrent({ ...current, ocrPasses: 1 })}
+                      className={`btn ${current.ocrPasses === 1 ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ flex: 1, padding: '7px 10px', fontSize: '0.78rem', justifyContent: 'center' }}
+                    >
+                      ⚡ Đọc 1 Lần nhanh
+                    </button>
+                  </div>
+                  <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '6px', lineHeight: 1.4 }}>
+                    {current.ocrPasses === 1
+                      ? 'Đọc nhanh 1 lượt bằng model AI để lấy văn bản tức thì.'
+                      : 'Đọc 3 lượt chuyên sâu (Toàn diện + Soi nét mực + Công thức) và chạy Hội đồng thẩm định đối chiếu nét mực thực tế với ảnh gốc.'}
+                  </p>
+                </div>
+
+                {/* Option 2: Grading Passes */}
+                <div
+                  style={{
+                    padding: '12px 14px',
+                    background: 'rgba(15, 23, 42, 0.65)',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fbbf24' }}>
+                      2. Số lượt chấm bài bằng AI:
+                    </span>
+                    <span className="badge badge-amber" style={{ fontSize: '0.68rem' }}>
+                      {current.gradingPasses === 1 ? 'Chấm 1 Lần (Mặc định)' : 'Chấm 3 Lần Triple-Pass'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setCurrent({ ...current, gradingPasses: 1 })}
+                      className={`btn ${current.gradingPasses === 1 ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ flex: 1, padding: '7px 10px', fontSize: '0.78rem', justifyContent: 'center' }}
+                    >
+                      ⚡ Chấm 1 Lần nhanh (Mặc định)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrent({ ...current, gradingPasses: 3 })}
+                      className={`btn ${current.gradingPasses === 3 ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ flex: 1, padding: '7px 10px', fontSize: '0.78rem', justifyContent: 'center' }}
+                    >
+                      ⭐ Chấm 3 Lần (Triple-Pass)
+                    </button>
+                  </div>
+                  <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '6px', lineHeight: 1.4 }}>
+                    {current.gradingPasses === 1
+                      ? 'Chấm 1 lượt nhanh theo barem chuẩn để có điểm ngay (Mặc định tiết kiệm & tốc độ cao).'
+                      : 'Chấm 3 góc nhìn (Barem chuẩn + Phản biện soi lỗi + Sư phạm ghi nhận tư duy) rồi tổng hợp điểm chuẩn xác.'}
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Sub-settings for Queue & Consensus */}
@@ -615,230 +636,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 gap: '6px',
               }}
             >
-              <Cpu size={18} color="#818cf8" />
-              {current.gradingMode === 'claude_triple_pass'
-                ? 'Cấu Hình Claude (https://apikey.pimath.id.vn/v1):'
-                : current.gradingMode === 'triple_consensus'
-                ? 'Cấu Hình 3 Model & API Key:'
-                : 'Chọn Nhà Cung Cấp AI Chấm Bài:'}
+              <Cpu size={18} color="#c084fc" />
+              Cấu Hình Nhà Cung Cấp AI: Qwen (OpenRouter)
             </label>
 
-            {/* Provider Tabs */}
+            {/* Provider Banner */}
             <div
               style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-                gap: '10px',
-                marginBottom: '18px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 16px',
+                borderRadius: 'var(--radius-md)',
+                border: '2px solid #a855f7',
+                background: 'rgba(168, 85, 247, 0.16)',
+                marginBottom: '16px',
               }}
             >
-              {/* Google Gemini Tab */}
-              <button
-                type="button"
-                onClick={() => handleProviderSelect('gemini')}
-                style={{
-                  padding: '12px 10px',
-                  borderRadius: 'var(--radius-md)',
-                  border:
-                    current.provider === 'gemini'
-                      ? '2px solid #06b6d4'
-                      : '1px solid var(--border-subtle)',
-                  background:
-                    current.provider === 'gemini'
-                      ? 'rgba(6, 182, 212, 0.15)'
-                      : 'rgba(255, 255, 255, 0.03)',
-                  color: '#f8fafc',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  transition: 'all 0.2s ease',
-                  boxShadow:
-                    current.provider === 'gemini' ? '0 0 16px rgba(6, 182, 212, 0.25)' : 'none',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Sparkles size={16} color="#06b6d4" />
-                  <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>Google Gemini</span>
-                </div>
-                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>3.8 / 3.7 Flash</span>
-                {current.provider === 'gemini' && (
-                  <span className="badge badge-indigo" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
-                    Đang chọn
-                  </span>
-                )}
-              </button>
-
-              {/* Anthropic Claude Tab */}
-              <button
-                type="button"
-                onClick={() => handleProviderSelect('claude')}
-                style={{
-                  padding: '12px 10px',
-                  borderRadius: 'var(--radius-md)',
-                  border:
-                    current.provider === 'claude'
-                      ? '2px solid #f59e0b'
-                      : '1px solid var(--border-subtle)',
-                  background:
-                    current.provider === 'claude'
-                      ? 'rgba(245, 158, 11, 0.15)'
-                      : 'rgba(255, 255, 255, 0.03)',
-                  color: '#f8fafc',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  transition: 'all 0.2s ease',
-                  boxShadow:
-                    current.provider === 'claude' ? '0 0 16px rgba(245, 158, 11, 0.25)' : 'none',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Bot size={16} color="#f59e0b" />
-                  <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>Claude API</span>
-                </div>
-                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Sonnet 4.6 / Opus 5</span>
-                {current.provider === 'claude' && (
-                  <span className="badge badge-amber" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
-                    Đang chọn
-                  </span>
-                )}
-              </button>
-
-              {/* OpenAI / OpenAPI Tab */}
-              <button
-                type="button"
-                onClick={() => handleProviderSelect('openai')}
-                style={{
-                  padding: '12px 10px',
-                  borderRadius: 'var(--radius-md)',
-                  border:
-                    current.provider === 'openai'
-                      ? '2px solid #10b981'
-                      : '1px solid var(--border-subtle)',
-                  background:
-                    current.provider === 'openai'
-                      ? 'rgba(16, 185, 129, 0.15)'
-                      : 'rgba(255, 255, 255, 0.03)',
-                  color: '#f8fafc',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  transition: 'all 0.2s ease',
-                  boxShadow:
-                    current.provider === 'openai' ? '0 0 16px rgba(16, 185, 129, 0.25)' : 'none',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Layers size={16} color="#10b981" />
-                  <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>OpenAI</span>
-                </div>
-                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>GPT-4o / o3-mini</span>
-                {current.provider === 'openai' && (
-                  <span className="badge badge-emerald" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
-                    Đang chọn
-                  </span>
-                )}
-              </button>
-
-              {/* OpenRouter (Qwen) Tab */}
-              <button
-                type="button"
-                onClick={() => handleProviderSelect('openrouter')}
-                style={{
-                  padding: '12px 10px',
-                  borderRadius: 'var(--radius-md)',
-                  border:
-                    current.provider === 'openrouter'
-                      ? '2px solid #a855f7'
-                      : '1px solid var(--border-subtle)',
-                  background:
-                    current.provider === 'openrouter'
-                      ? 'rgba(168, 85, 247, 0.18)'
-                      : 'rgba(255, 255, 255, 0.03)',
-                  color: '#f8fafc',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  transition: 'all 0.2s ease',
-                  boxShadow:
-                    current.provider === 'openrouter' ? '0 0 16px rgba(168, 85, 247, 0.3)' : 'none',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Cpu size={16} color="#c084fc" />
-                  <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>Qwen (OpenRouter)</span>
-                </div>
-                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Qwen 3.8 / 2.5 VL</span>
-                {current.provider === 'openrouter' && (
-                  <span
-                    className="badge"
-                    style={{
-                      fontSize: '0.68rem',
-                      padding: '2px 8px',
-                      background: 'rgba(168, 85, 247, 0.3)',
-                      color: '#e9d5ff',
-                      border: '1px solid #a855f7',
-                    }}
-                  >
-                    Đang chọn
-                  </span>
-                )}
-              </button>
-
-              {/* Alibaba Cloud (Qwen) Tab */}
-              <button
-                type="button"
-                onClick={() => handleProviderSelect('alibabacloud')}
-                style={{
-                  padding: '12px 10px',
-                  borderRadius: 'var(--radius-md)',
-                  border:
-                    current.provider === 'alibabacloud'
-                      ? '2px solid #ea580c'
-                      : '1px solid var(--border-subtle)',
-                  background:
-                    current.provider === 'alibabacloud'
-                      ? 'rgba(234, 88, 12, 0.18)'
-                      : 'rgba(255, 255, 255, 0.03)',
-                  color: '#f8fafc',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '6px',
-                  transition: 'all 0.2s ease',
-                  boxShadow:
-                    current.provider === 'alibabacloud' ? '0 0 16px rgba(234, 88, 12, 0.3)' : 'none',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Cpu size={16} color="#fb923c" />
-                  <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>Alibaba Cloud</span>
-                </div>
-                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Model Studio (Qwen)</span>
-                {current.provider === 'alibabacloud' && (
-                  <span
-                    className="badge"
-                    style={{
-                      fontSize: '0.68rem',
-                      padding: '2px 8px',
-                      background: 'rgba(234, 88, 12, 0.3)',
-                      color: '#ffedd5',
-                      border: '1px solid #ea580c',
-                    }}
-                  >
-                    Đang chọn
-                  </span>
-                )}
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Cpu size={18} color="#c084fc" />
+                <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#f8fafc' }}>
+                  Qwen AI (OpenRouter.ai)
+                </span>
+                <span className="badge" style={{ background: 'rgba(168, 85, 247, 0.3)', color: '#e9d5ff', border: '1px solid #a855f7', fontSize: '0.68rem' }}>
+                  Đang hoạt động ⭐
+                </span>
+              </div>
+              <span style={{ fontSize: '0.74rem', color: '#c084fc' }}>
+                Hỗ trợ Vision Đọc Ảnh & Reasoning Tư Duy Sâu
+              </span>
             </div>
 
             {/* Provider Details Sub-Panel */}
@@ -869,835 +695,241 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 }}
               >
                 <span>
-                  💡 <strong>Gợi ý:</strong> Để trống các ô API Key nếu muốn hệ thống tự động dùng các API Key chuẩn đã khai báo sẵn trong file <code>.env.local</code>.
+                  💡 <strong>Gợi ý:</strong> Để trống ô API Key nếu muốn hệ thống tự động dùng <code>OPENROUTER_API_KEY</code> đã khai báo trong file <code>.env.local</code>.
                 </span>
-                {(current.geminiApiKey ||
-                  current.claudeApiKey ||
-                  current.openaiApiKey ||
-                  current.openrouterApiKey ||
-                  current.alibabacloudApiKey) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCurrent({
-                          ...current,
-                          geminiApiKey: '',
-                          claudeApiKey: '',
-                          openaiApiKey: '',
-                          openrouterApiKey: '',
-                          alibabacloudApiKey: '',
-                        });
-                      }}
-                      className="btn btn-secondary"
-                      style={{ padding: '4px 10px', fontSize: '0.74rem', flexShrink: 0 }}
-                    >
-                      Xóa key trình duyệt (Dùng .env.local)
-                    </button>
-                  )}
+                {current.openrouterApiKey && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrent({
+                        ...current,
+                        openrouterApiKey: '',
+                      });
+                    }}
+                    className="btn btn-secondary"
+                    style={{ padding: '4px 10px', fontSize: '0.74rem', flexShrink: 0 }}
+                  >
+                    Dùng .env.local
+                  </button>
+                )}
               </div>
 
-              {/* 1. GEMINI CONFIG */}
-              {current.provider === 'gemini' && (
-                <>
-                  <div>
-                    <label
-                      style={{
-                        fontSize: '0.85rem',
-                        fontWeight: 700,
-                        color: '#f8fafc',
-                        marginBottom: '6px',
-                        display: 'block',
-                      }}
-                    >
-                      Mô hình Gemini:
-                    </label>
-                    <select
-                      className="input-field"
-                      value={isCustomGemini ? 'custom' : current.geminiModel}
-                      onChange={(e) => {
-                        if (e.target.value === 'custom') {
-                          setIsCustomGemini(true);
-                        } else {
-                          setIsCustomGemini(false);
-                          setCurrent({ ...current, geminiModel: e.target.value });
-                        }
-                      }}
-                    >
-                      <option value="gemini-3.8-flash">
-                        Gemini 3.8 Flash (Khuyên dùng - Tốc độ cao & Mới nhất)
-                      </option>
-                      <option value="gemini-3.7-flash">
-                        Gemini 3.7 Flash (Tối ưu tư duy và nhận diện bài làm)
-                      </option>
-                      <option value="gemini-3.5-flash">Gemini 3.5 Flash (Phản hồi cực nhanh)</option>
-                      <option value="gemini-2.5-pro">Gemini 2.5 Pro (Tư duy toán học nâng cao)</option>
-                      <option value="custom">-- Nhập tên model tùy chỉnh --</option>
-                    </select>
+              {/* QWEN OPENROUTER CONFIG */}
+              <div>
+                <label
+                  style={{
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    color: '#f8fafc',
+                    marginBottom: '6px',
+                    display: 'block',
+                  }}
+                >
+                  Mô hình Qwen Chấm Bài (OpenRouter.ai):
+                </label>
+                <select
+                  className="input-field"
+                  value={isCustomOpenRouter ? 'custom' : (current.openrouterModel || 'qwen/qwen3.8-27b')}
+                  onChange={(e) => {
+                    if (e.target.value === 'custom') {
+                      setIsCustomOpenRouter(true);
+                    } else {
+                      setIsCustomOpenRouter(false);
+                      setCurrent({ ...current, openrouterModel: e.target.value });
+                    }
+                  }}
+                >
+                  <option value="qwen/qwen3.8-27b">
+                    qwen/qwen3.8-27b (Mặc định Chấm bài & OCR ⭐ - Đọc ảnh & Suy luận CoT)
+                  </option>
+                  <option value="qwen/qwen3-vl-235b-a22b-instruct">
+                    qwen/qwen3-vl-235b-a22b-instruct (Chuyên gia đọc ảnh OCR ⭐ - 235B MoE Vision)
+                  </option>
+                  <option value="qwen/qwen3.8-flash">
+                    qwen/qwen3.8-flash (OCR & Suy luận siêu nhanh ⚡ - Paid)
+                  </option>
+                  <option value="qwen/qwen-2.5-vl-72b-instruct">
+                    qwen/qwen-2.5-vl-72b-instruct (Thị giác & chữ viết tay 72B - Paid)
+                  </option>
+                  <option value="qwen/qwen-2.5-72b-instruct">
+                    qwen/qwen-2.5-72b-instruct (Mô hình 72B mạnh mẽ, toàn diện)
+                  </option>
+                  <option value="qwen/qwq-32b-preview">
+                    qwen/qwq-32b-preview (QwQ 32B - Chuyên gia suy luận logic toán học)
+                  </option>
+                  <option value="qwen/qwen-2.5-coder-32b-instruct">
+                    qwen/qwen-2.5-coder-32b-instruct (Qwen 2.5 Coder 32B)
+                  </option>
+                  <option value="custom">-- Nhập tên model tùy chỉnh trên OpenRouter --</option>
+                </select>
 
-                    {isCustomGemini && (
-                      <input
-                        type="text"
-                        className="input-field font-mono"
-                        placeholder="Ví dụ: gemini-3.8-flash"
-                        value={current.geminiModel}
-                        onChange={(e) => setCurrent({ ...current, geminiModel: e.target.value })}
-                        style={{ marginTop: '8px' }}
-                      />
-                    )}
-                  </div>
+                {isCustomOpenRouter && (
+                  <input
+                    type="text"
+                    className="input-field font-mono"
+                    placeholder="Ví dụ: qwen/qwen3.8-27b hoặc qwen/qwen3-vl-235b-a22b-instruct"
+                    value={current.openrouterModel || ''}
+                    onChange={(e) => setCurrent({ ...current, openrouterModel: e.target.value })}
+                    style={{ marginTop: '8px' }}
+                  />
+                )}
+              </div>
 
-                  <div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '6px',
-                      }}
-                    >
-                      <label
-                        style={{
-                          fontSize: '0.85rem',
-                          fontWeight: 700,
-                          color: '#f8fafc',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                        }}
-                      >
-                        <Key size={14} color="#fbbf24" />
-                        Google Gemini API Key:
-                      </label>
-                      <a
-                        href="https://aistudio.google.com/app/apikey"
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          fontSize: '0.75rem',
-                          color: '#38bdf8',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          textDecoration: 'none',
-                        }}
-                      >
-                        Lấy key miễn phí <ExternalLink size={12} />
-                      </a>
-                    </div>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showGeminiKey ? 'text' : 'password'}
-                        className="input-field font-mono"
-                        value={current.geminiApiKey}
-                        onChange={(e) => setCurrent({ ...current, geminiApiKey: e.target.value })}
-                        placeholder="AIzaSy..."
-                        style={{ paddingRight: '40px' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowGeminiKey(!showGeminiKey)}
-                        style={{
-                          position: 'absolute',
-                          right: '10px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {showGeminiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {renderPassSelector('gemini', 'Google Gemini')}
-                </>
-              )}
-
-              {/* 2. CLAUDE CONFIG */}
-              {current.provider === 'claude' && (
-                <>
-                  <div>
-                    <label
-                      style={{
-                        fontSize: '0.85rem',
-                        fontWeight: 700,
-                        color: '#f8fafc',
-                        marginBottom: '6px',
-                        display: 'block',
-                      }}
-                    >
-                      Mô hình Claude:
-                    </label>
-                    <select
-                      className="input-field"
-                      value={isCustomClaude ? 'custom' : current.claudeModel}
-                      onChange={(e) => {
-                        if (e.target.value === 'custom') {
-                          setIsCustomClaude(true);
-                        } else {
-                          setIsCustomClaude(false);
-                          setCurrent({ ...current, claudeModel: e.target.value });
-                        }
-                      }}
-                    >
-                      {claudeModels.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} ({m.description})
-                        </option>
-                      ))}
-                      <option value="custom">-- Nhập tên model Claude tùy chỉnh --</option>
-                    </select>
-
-                    <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '4px' }}>
-                      💡 Danh sách mô hình tuân theo tài liệu Anthropic Messages API (apikey.pimath.id.vn). Bạn có thể cấu hình ẩn/hiện model qua biến <code>CLAUDE_VISIBLE_MODELS</code> hoặc <code>CLAUDE_HIDDEN_MODELS</code> trong <code>.env.local</code>.
-                    </p>
-
-                    {isCustomClaude && (
-                      <input
-                        type="text"
-                        className="input-field font-mono"
-                        placeholder="Ví dụ: claude-sonnet-4-6"
-                        value={current.claudeModel}
-                        onChange={(e) => setCurrent({ ...current, claudeModel: e.target.value })}
-                        style={{ marginTop: '8px' }}
-                      />
-                    )}
-                  </div>
-
-                  <div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '6px',
-                      }}
-                    >
-                      <label
-                        style={{
-                          fontSize: '0.85rem',
-                          fontWeight: 700,
-                          color: '#f8fafc',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                        }}
-                      >
-                        <Key size={14} color="#f59e0b" />
-                        Anthropic Claude API Key:
-                      </label>
-                      <a
-                        href="https://console.anthropic.com/settings/keys"
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          fontSize: '0.75rem',
-                          color: '#f59e0b',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          textDecoration: 'none',
-                        }}
-                      >
-                        Lấy key Anthropic <ExternalLink size={12} />
-                      </a>
-                    </div>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showClaudeKey ? 'text' : 'password'}
-                        className="input-field font-mono"
-                        value={current.claudeApiKey || ''}
-                        onChange={(e) => setCurrent({ ...current, claudeApiKey: e.target.value })}
-                        placeholder="sk-ant-api03-..."
-                        style={{ paddingRight: '40px' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowClaudeKey(!showClaudeKey)}
-                        style={{
-                          position: 'absolute',
-                          right: '10px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {showClaudeKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label
-                      style={{
-                        fontSize: '0.8rem',
-                        color: 'var(--text-secondary)',
-                        marginBottom: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      <Globe size={13} />
-                      Claude Base URL (Tùy chọn - mặc định: https://apikey.pimath.id.vn/v1):
-                    </label>
-                    <input
-                      type="text"
-                      className="input-field font-mono"
-                      value={current.claudeBaseUrl || ''}
-                      onChange={(e) => setCurrent({ ...current, claudeBaseUrl: e.target.value })}
-                      placeholder="https://apikey.pimath.id.vn/v1"
-                    />
-                  </div>
-
-                  {renderPassSelector('claude', 'Anthropic Claude')}
-                </>
-              )}
-
-              {/* 3. OPENAI / OPENAPI CONFIG */}
-              {current.provider === 'openai' && (
-                <>
-                  <div>
-                    <label
-                      style={{
-                        fontSize: '0.85rem',
-                        fontWeight: 700,
-                        color: '#f8fafc',
-                        marginBottom: '6px',
-                        display: 'block',
-                      }}
-                    >
-                      Mô hình OpenAI / OpenAPI:
-                    </label>
-                    <select
-                      className="input-field"
-                      value={isCustomOpenAI ? 'custom' : current.openaiModel}
-                      onChange={(e) => {
-                        if (e.target.value === 'custom') {
-                          setIsCustomOpenAI(true);
-                        } else {
-                          setIsCustomOpenAI(false);
-                          setCurrent({ ...current, openaiModel: e.target.value });
-                        }
-                      }}
-                    >
-                      <option value="gpt-4o">
-                        GPT-4o (Khuyên dùng - Đa phương thức xuất sắc đọc chữ viết tay)
-                      </option>
-                      <option value="gpt-4o-mini">
-                        GPT-4o Mini (Phản hồi nhanh, chi phí siêu tiết kiệm)
-                      </option>
-                      <option value="o3-mini">o3-mini (Tư duy suy luận logic toán học sâu)</option>
-                      <option value="o1">o1 (Mô hình suy luận cao cấp)</option>
-                      <option value="gpt-4-turbo">GPT-4 Turbo Vision</option>
-                      <option value="custom">-- Nhập tên model tùy chỉnh / OpenRouter / DeepSeek --</option>
-                    </select>
-
-                    {isCustomOpenAI && (
-                      <input
-                        type="text"
-                        className="input-field font-mono"
-                        placeholder="Ví dụ: gpt-4o hoặc deepseek-chat hoặc anthropic/claude-3.5-sonnet"
-                        value={current.openaiModel}
-                        onChange={(e) => setCurrent({ ...current, openaiModel: e.target.value })}
-                        style={{ marginTop: '8px' }}
-                      />
-                    )}
-                  </div>
-
-                  <div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '6px',
-                      }}
-                    >
-                      <label
-                        style={{
-                          fontSize: '0.85rem',
-                          fontWeight: 700,
-                          color: '#f8fafc',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                        }}
-                      >
-                        <Key size={14} color="#10b981" />
-                        OpenAI API Key:
-                      </label>
-                      <a
-                        href="https://platform.openai.com/api-keys"
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          fontSize: '0.75rem',
-                          color: '#34d399',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          textDecoration: 'none',
-                        }}
-                      >
-                        Lấy key OpenAI <ExternalLink size={12} />
-                      </a>
-                    </div>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showOpenAIKey ? 'text' : 'password'}
-                        className="input-field font-mono"
-                        value={current.openaiApiKey || ''}
-                        onChange={(e) => setCurrent({ ...current, openaiApiKey: e.target.value })}
-                        placeholder="sk-..."
-                        style={{ paddingRight: '40px' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowOpenAIKey(!showOpenAIKey)}
-                        style={{
-                          position: 'absolute',
-                          right: '10px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {showOpenAIKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label
-                      style={{
-                        fontSize: '0.8rem',
-                        color: 'var(--text-secondary)',
-                        marginBottom: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      <Globe size={13} />
-                      OpenAI Base URL (Hỗ trợ chuẩn OpenAPI / OpenRouter / OneAPI / DeepSeek):
-                    </label>
-                    <input
-                      type="text"
-                      className="input-field font-mono"
-                      value={current.openaiBaseUrl || ''}
-                      onChange={(e) => setCurrent({ ...current, openaiBaseUrl: e.target.value })}
-                      placeholder="https://api.openai.com/v1"
-                    />
-                    <p style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '4px' }}>
-                      Mặc định là <code>https://api.openai.com/v1</code>. Có thể đổi sang OpenRouter (<code>https://openrouter.ai/api/v1</code>) hoặc proxy tùy ý.
-                    </p>
-                  </div>
-
-                  {renderPassSelector('openai', 'OpenAI')}
-                </>
-              )}
-
-              {/* 4. OPENROUTER / QWEN CONFIG */}
-              {current.provider === 'openrouter' && (
-                <>
-                  <div>
-                    <label
-                      style={{
-                        fontSize: '0.85rem',
-                        fontWeight: 700,
-                        color: '#f8fafc',
-                        marginBottom: '6px',
-                        display: 'block',
-                      }}
-                    >
-                      Mô hình Qwen (OpenRouter.ai):
-                    </label>
-                    <select
-                      className="input-field"
-                      value={isCustomOpenRouter ? 'custom' : (current.openrouterModel || 'qwen/qwen3.8-flash')}
-                      onChange={(e) => {
-                        if (e.target.value === 'custom') {
-                          setIsCustomOpenRouter(true);
-                        } else {
-                          setIsCustomOpenRouter(false);
-                          setCurrent({ ...current, openrouterModel: e.target.value });
-                        }
-                      }}
-                    >
-                      <option value="qwen/qwen3.8-flash">
-                        qwen/qwen3.8-flash (Khuyên dùng - Siêu nhanh, Reasoning tokens, Mới nhất)
-                      </option>
-                      <option value="qwen/qwen3.8-27b:free">
-                        qwen/qwen3.8-27b:free (Suy luận reasoning CoT, Miễn phí)
-                      </option>
-                      <option value="qwen/qwen-2.5-vl-72b-instruct:free">
-                        qwen/qwen-2.5-vl-72b-instruct:free (Đọc ảnh & chữ viết tay Toán học, Miễn phí)
-                      </option>
-                      <option value="qwen/qwen-2.5-vl-72b-instruct">
-                        qwen/qwen-2.5-vl-72b-instruct (Thị giác & chữ viết tay đỉnh cao)
-                      </option>
-                      <option value="qwen/qwen-2.5-72b-instruct">
-                        qwen/qwen-2.5-72b-instruct (Mô hình 72B mạnh mẽ, toàn diện)
-                      </option>
-                      <option value="qwen/qwq-32b-preview">
-                        qwen/qwq-32b-preview (QwQ 32B - Chuyên gia suy luận logic toán học)
-                      </option>
-                      <option value="qwen/qwen-2.5-coder-32b-instruct">
-                        qwen/qwen-2.5-coder-32b-instruct (Qwen 2.5 Coder 32B)
-                      </option>
-                      <option value="custom">-- Nhập tên model tùy chỉnh trên OpenRouter --</option>
-                    </select>
-
-                    {isCustomOpenRouter && (
-                      <input
-                        type="text"
-                        className="input-field font-mono"
-                        placeholder="Ví dụ: qwen/qwen3.8-27b:free hoặc qwen/qwen-2.5-vl-72b-instruct"
-                        value={current.openrouterModel || ''}
-                        onChange={(e) => setCurrent({ ...current, openrouterModel: e.target.value })}
-                        style={{ marginTop: '8px' }}
-                      />
-                    )}
-                  </div>
-
-                  <div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '6px',
-                      }}
-                    >
-                      <label
-                        style={{
-                          fontSize: '0.85rem',
-                          fontWeight: 700,
-                          color: '#f8fafc',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                        }}
-                      >
-                        <Key size={14} color="#c084fc" />
-                        OpenRouter API Key:
-                      </label>
-                      <a
-                        href="https://openrouter.ai/keys"
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          fontSize: '0.75rem',
-                          color: '#c084fc',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          textDecoration: 'none',
-                        }}
-                      >
-                        Lấy key OpenRouter <ExternalLink size={12} />
-                      </a>
-                    </div>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showOpenRouterKey ? 'text' : 'password'}
-                        className="input-field font-mono"
-                        value={current.openrouterApiKey || ''}
-                        onChange={(e) => setCurrent({ ...current, openrouterApiKey: e.target.value })}
-                        placeholder="sk-or-v1-..."
-                        style={{ paddingRight: '40px' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowOpenRouterKey(!showOpenRouterKey)}
-                        style={{
-                          position: 'absolute',
-                          right: '10px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {showOpenRouterKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label
-                      style={{
-                        fontSize: '0.8rem',
-                        color: 'var(--text-secondary)',
-                        marginBottom: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      <Globe size={13} />
-                      OpenRouter Base URL:
-                    </label>
-                    <input
-                      type="text"
-                      className="input-field font-mono"
-                      value={current.openrouterBaseUrl || ''}
-                      onChange={(e) => setCurrent({ ...current, openrouterBaseUrl: e.target.value })}
-                      placeholder="https://openrouter.ai/api/v1"
-                    />
-                  </div>
-
-                  {/* Reasoning toggle */}
-                  <div
+              <div>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '6px',
+                  }}
+                >
+                  <label
                     style={{
-                      padding: '12px 14px',
-                      background: 'rgba(168, 85, 247, 0.08)',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid rgba(168, 85, 247, 0.25)',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      color: '#f8fafc',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '12px',
+                      gap: '6px',
                     }}
                   >
-                    <div>
-                      <span style={{ fontWeight: 700, fontSize: '0.86rem', color: '#f8fafc' }}>
-                        🧠 Bật chế độ Reasoning (Suy luận từng bước - reasoning: &#123; enabled: true &#125;)
-                      </span>
-                      <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px', lineHeight: 1.4 }}>
-                        Kích hoạt tư duy chuỗi suy luận sâu của Qwen (Chain-of-Thought) và ghi nhận chi tiết <code>reasoning_details</code> trong lời phê và thẩm định tiêu chí.
-                      </p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={current.openrouterReasoning !== false}
-                      onChange={(e) =>
-                        setCurrent({ ...current, openrouterReasoning: e.target.checked })
-                      }
-                      style={{
-                        width: '18px',
-                        height: '18px',
-                        cursor: 'pointer',
-                        accentColor: '#a855f7',
-                        flexShrink: 0,
-                      }}
-                    />
-                  </div>
-
-                  {renderPassSelector('openrouter', 'Qwen (OpenRouter)')}
-
-                  {/* Qwen OCR & Vision helper notice */}
-                  <div
+                    <Key size={14} color="#c084fc" />
+                    OpenRouter API Key:
+                  </label>
+                  <a
+                    href="https://openrouter.ai/keys"
+                    target="_blank"
+                    rel="noreferrer"
                     style={{
-                      padding: '10px 14px',
-                      background: 'rgba(168, 85, 247, 0.08)',
-                      border: '1px solid rgba(168, 85, 247, 0.25)',
-                      borderRadius: 'var(--radius-sm)',
-                      fontSize: '0.76rem',
-                      color: '#e9d5ff',
+                      fontSize: '0.75rem',
+                      color: '#c084fc',
                       display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '10px',
+                      alignItems: 'center',
+                      gap: '4px',
+                      textDecoration: 'none',
                     }}
                   >
-                    <Sparkles size={16} color="#c084fc" style={{ flexShrink: 0, marginTop: '2px' }} />
-                    <div style={{ lineHeight: 1.5 }}>
-                      <strong style={{ color: '#ffffff' }}>Tự động OCR chữ viết tay & ảnh bài làm:</strong> Khi bài làm có hình ảnh, hệ thống tự động sử dụng mô hình thị giác chuyên sâu <code>qwen/qwen-2.5-vl-72b-instruct</code> để chuyển hóa toàn bộ chữ viết tay, căn thức, ma trận sang LaTeX chuẩn mực trước khi tiến hành chấm điểm {current.modelPasses?.openrouter === 1 ? '1 lần' : '3 lần'}.
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* 5. ALIBABA CLOUD MODEL STUDIO (QWEN) CONFIG */}
-              {current.provider === 'alibabacloud' && (
-                <>
-                  <div>
-                    <label
-                      style={{
-                        fontSize: '0.85rem',
-                        fontWeight: 700,
-                        color: '#f8fafc',
-                        marginBottom: '6px',
-                        display: 'block',
-                      }}
-                    >
-                      Mô hình Qwen (Alibaba Cloud Model Studio):
-                    </label>
-                    <select
-                      className="input-field"
-                      value={isCustomAlibabaCloud ? 'custom' : (current.alibabacloudModel || 'qwen-plus-character')}
-                      onChange={(e) => {
-                        if (e.target.value === 'custom') {
-                          setIsCustomAlibabaCloud(true);
-                        } else {
-                          setIsCustomAlibabaCloud(false);
-                          setCurrent({ ...current, alibabacloudModel: e.target.value });
-                        }
-                      }}
-                    >
-                      <option value="qwen-plus-character">
-                        qwen-plus-character (Đang kích hoạt trên tài khoản - Khuyên dùng)
-                      </option>
-                      <option value="qwen-flash-character">
-                        qwen-flash-character (Đang kích hoạt trên tài khoản - Phản hồi nhanh)
-                      </option>
-                      <option value="qwen-plus">
-                        qwen-plus (Qwen Plus - Đa năng)
-                      </option>
-                      <option value="qwen-flash">
-                        qwen-flash (Qwen Flash)
-                      </option>
-                      <option value="qwen-max">
-                        qwen-max (Qwen Max - Mạnh nhất)
-                      </option>
-                      <option value="qwen-vl-max">
-                        qwen-vl-max (Đọc ảnh & chữ viết tay)
-                      </option>
-                      <option value="qwen2.5-vl-72b-instruct">
-                        qwen2.5-vl-72b-instruct (Chuyên gia chữ viết tay & công thức Toán)
-                      </option>
-                      <option value="custom">-- Nhập tên model tùy chỉnh trên Alibaba Cloud --</option>
-                    </select>
-
-                    {isCustomAlibabaCloud && (
-                      <input
-                        type="text"
-                        className="input-field font-mono"
-                        placeholder="Ví dụ: qwen-plus-character hoặc qwen-vl-max"
-                        value={current.alibabacloudModel || ''}
-                        onChange={(e) => setCurrent({ ...current, alibabacloudModel: e.target.value })}
-                        style={{ marginTop: '8px' }}
-                      />
-                    )}
-                  </div>
-
-                  <div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '6px',
-                      }}
-                    >
-                      <label
-                        style={{
-                          fontSize: '0.85rem',
-                          fontWeight: 700,
-                          color: '#f8fafc',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                        }}
-                      >
-                        <Key size={14} color="#fb923c" />
-                        Alibaba Cloud API Key:
-                      </label>
-                      <a
-                        href="https://modelstudio.console.alibabacloud.com"
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          fontSize: '0.75rem',
-                          color: '#fb923c',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          textDecoration: 'none',
-                        }}
-                      >
-                        Model Studio Console <ExternalLink size={12} />
-                      </a>
-                    </div>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showAlibabaCloudKey ? 'text' : 'password'}
-                        className="input-field font-mono"
-                        value={current.alibabacloudApiKey || ''}
-                        onChange={(e) => setCurrent({ ...current, alibabacloudApiKey: e.target.value })}
-                        placeholder="sk-ws-..."
-                        style={{ paddingRight: '40px' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowAlibabaCloudKey(!showAlibabaCloudKey)}
-                        style={{
-                          position: 'absolute',
-                          right: '10px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {showAlibabaCloudKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label
-                      style={{
-                        fontSize: '0.8rem',
-                        color: 'var(--text-secondary)',
-                        marginBottom: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      <Globe size={13} />
-                      Alibaba Cloud Base URL (OpenAI-Compatible endpoint):
-                    </label>
-                    <input
-                      type="text"
-                      className="input-field font-mono"
-                      value={current.alibabacloudBaseUrl || ''}
-                      onChange={(e) => setCurrent({ ...current, alibabacloudBaseUrl: e.target.value })}
-                      placeholder="https://ws-oxwvfx79avt7ebq3.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
-                    />
-                    <p style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '4px' }}>
-                      Endpoint tương thích OpenAI khu vực Singapore (DashScope / Model Studio).
-                    </p>
-                  </div>
-
-                  {renderPassSelector('alibabacloud', 'Alibaba Cloud (Qwen)')}
-
-                  {/* Alibaba Cloud OCR & Vision helper notice */}
-                  <div
+                    Lấy key OpenRouter <ExternalLink size={12} />
+                  </a>
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showOpenRouterKey ? 'text' : 'password'}
+                    className="input-field font-mono"
+                    value={current.openrouterApiKey || ''}
+                    onChange={(e) => setCurrent({ ...current, openrouterApiKey: e.target.value })}
+                    placeholder="sk-or-v1-..."
+                    style={{ paddingRight: '40px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOpenRouterKey(!showOpenRouterKey)}
                     style={{
-                      padding: '10px 14px',
-                      background: 'rgba(234, 88, 12, 0.08)',
-                      border: '1px solid rgba(234, 88, 12, 0.25)',
-                      borderRadius: 'var(--radius-sm)',
-                      fontSize: '0.76rem',
-                      color: '#ffedd5',
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '10px',
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
                     }}
                   >
-                    <Sparkles size={16} color="#fb923c" style={{ flexShrink: 0, marginTop: '2px' }} />
-                    <div style={{ lineHeight: 1.5 }}>
-                      <strong style={{ color: '#ffffff' }}>Tự động OCR chữ viết tay & ảnh bài làm:</strong> Khi bài làm có ảnh chụp viết tay, hệ thống sẽ tự động sử dụng mô hình thị giác <code>qwen-vl-max</code> của Alibaba Cloud để chuyển đổi công thức Toán viết tay sang LaTeX trước khi tiến hành chấm bài {current.modelPasses?.alibabacloud === 1 ? '1 lần' : '3 lần'}.
-                    </div>
-                  </div>
-                </>
-              )}
+                    {showOpenRouterKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    fontSize: '0.8rem',
+                    color: 'var(--text-secondary)',
+                    marginBottom: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <Globe size={13} />
+                  OpenRouter Base URL:
+                </label>
+                <input
+                  type="text"
+                  className="input-field font-mono"
+                  value={current.openrouterBaseUrl || ''}
+                  onChange={(e) => setCurrent({ ...current, openrouterBaseUrl: e.target.value })}
+                  placeholder="https://openrouter.ai/api/v1"
+                />
+              </div>
+
+              {/* Reasoning toggle */}
+              <div
+                style={{
+                  padding: '12px 14px',
+                  background: 'rgba(168, 85, 247, 0.08)',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid rgba(168, 85, 247, 0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                }}
+              >
+                <div>
+                  <span style={{ fontWeight: 700, fontSize: '0.86rem', color: '#f8fafc' }}>
+                    🧠 Chế độ Tư Duy Sâu (Deep Reasoning / Chain-of-Thought)
+                  </span>
+                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px', lineHeight: 1.4 }}>
+                    Kích hoạt chuỗi suy luận từng bước cho Qwen 3.8 27B (<code>reasoning: &#123; effort: 'high' &#125;</code>). Khi chọn Chấm 3 Lần, hệ thống bắt buộc chạy chế độ tư duy sâu để thẩm định từng phép biến đổi toán học.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={current.openrouterReasoning !== false}
+                  onChange={(e) =>
+                    setCurrent({ ...current, openrouterReasoning: e.target.checked })
+                  }
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    cursor: 'pointer',
+                    accentColor: '#a855f7',
+                    flexShrink: 0,
+                  }}
+                />
+              </div>
+
+              {renderPassSelector('openrouter', 'Qwen 3.8 27B (OpenRouter)')}
+
+              {/* Qwen OCR & Vision helper notice */}
+              <div
+                style={{
+                  padding: '12px 14px',
+                  background: 'rgba(168, 85, 247, 0.1)',
+                  border: '1px solid rgba(168, 85, 247, 0.3)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.78rem',
+                  color: '#e9d5ff',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '10px',
+                }}
+              >
+                <Sparkles size={18} color="#c084fc" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div style={{ lineHeight: 1.5 }}>
+                  <strong style={{ color: '#ffffff', display: 'block', marginBottom: '4px' }}>
+                    Quy trình OCR chuyên sâu 3 lần kết hợp 3 model Qwen (OpenRouter Paid):
+                  </strong>
+                  <ul style={{ margin: 0, paddingLeft: '16px', color: '#cbd5e1' }}>
+                    <li><strong>Lần 1:</strong> <code>qwen/qwen3-vl-235b-a22b-instruct</code> (Đọc toàn diện & cấu trúc bài làm).</li>
+                    <li><strong>Lần 2:</strong> <code>qwen/qwen3.8-27b</code> (Soi nét mực, điều kiện xác định $x \ge 0$, ký hiệu viết tay).</li>
+                    <li><strong>Lần 3:</strong> <code>qwen/qwen3.8-flash</code> (Rà soát công thức toán học & logic biến đổi siêu tốc).</li>
+                    <li><strong>Thẩm định & Verify:</strong> Đối chiếu lại cả 3 bản với ảnh gốc để xuất ra bản LaTeX chính xác tuyệt đối trước khi chấm điểm.</li>
+                  </ul>
+                </div>
+              </div>
 
               {/* Security Hint */}
               <div

@@ -39,12 +39,49 @@ CHẾ ĐỘ CHẤM: CHUẨN KỲ THI (STANDARD)
 
 /**
  * Prompt for dedicated Handwritten Math OCR & LaTeX Transcription
+ * Supports optional 3 distinct passes:
+ * - Pass 1: Comprehensive & Full fidelity
+ * - Pass 2: Stroke-level & Anti-auto-correct Audit (especially inequalities and conditions)
+ * - Pass 3: Formula & Algebraic logic verification
  */
-export function buildMathOcrPrompt(studentName?: string): string {
-  return `Bạn là một Chuyên gia số hóa và phiên âm tài liệu Toán học viết tay sang LaTeX chuẩn mực tại Việt Nam.
+export function buildMathOcrPrompt(studentName?: string, pass?: 1 | 2 | 3): string {
+  let passHeader = '';
+  let passFocus = '';
+
+  if (pass === 1) {
+    passHeader = '【LẦN ĐỌC 1/3: PHIÊN ÂM TOÀN DIỆN & TRUNG THỰC TỪNG BƯỚC】\n';
+    passFocus = `\
+TRỌNG TÂM LẦN 1:
+• Phiên âm đầy đủ, không bỏ sót bất kỳ dòng nào, câu chữ tiếng Việt, ký hiệu hay bước trung gian.
+• Chuyển đổi chính xác 100% công thức sang Markdown + chuẩn LaTeX: inline $...$, block $$...$$.
+• Giữ nguyên cấu trúc dòng, thứ tự giải và cách bố cục của học sinh.`;
+  } else if (pass === 2) {
+    passHeader = '【LẦN ĐỌC 2/3: GIÁM KHẢO PHẢN BIỆN — SOI SÂU NÉT MỰC, DẤU BẤT ĐẲNG THỨC & ĐKXĐ】\n';
+    passFocus = `\
+TRỌNG TÂM LẦN 2 (AUDITOR / ANTI AUTO-CORRECT):
+• QUAN SÁT TỪNG NÉT MỰC Ở CÁC DẤU SO SÁNH (>, >=, ⩾, <, <=, ⩽):
+  Nếu có bất kỳ nét gạch ngang hoặc xiên nào dưới dấu > (như dấu ⩾ hoặc ≥, ví dụ < x ⩾ 0 >) → BẮT BUỘC PHẢI GHI NHẬN LÀ "$x \\ge 0$" hoặc "$x \\geqslant 0$".
+  TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ ĐỘNG SỬA THÀNH "$x > 0$". Lỗi viết sai điều kiện của học sinh là căn cứ quan trọng để giáo viên chấm điểm.
+• Phân biệt thật kỹ các nét bút dễ nhầm lẫn:
+  - Chữ "x" vs dấu nhân "\\times" hoặc dấu chấm "\\cdot".
+  - Chữ "z" vs số "2".
+  - Chữ "t" vs dấu cộng "+".
+  - Số "1" vs chữ "l" vs dấu gạch đứng "|".
+  - Dấu trừ "-" vs gạch phân số.`;
+  } else if (pass === 3) {
+    passHeader = '【LẦN ĐỌC 3/3: RÀ SOÁT LOGIC BIẾN ĐỔI, CÔNG THỨC TOÁN & TẬP NGHIỆM】\n';
+    passFocus = `\
+TRỌNG TÂM LẦN 3 (FORMULA & LOGIC FIDELITY):
+• Soi kỹ các biểu thức căn thức \\sqrt{...}, phân số \\frac{a}{b}, số mũ ^ và chỉ số dưới _.
+• Rà soát các dấu suy ra (\\Rightarrow) và tương đương (\\Leftrightarrow) giữa các phương trình.
+• Kiểm tra bước đặt ẩn phụ $t = ...$, điều kiện của ẩn phụ (ví dụ $t \\ge 1$, $t > 0$).
+• Ghi nhận chính xác dòng đối chiếu điều kiện (Nhận / Loại) và kết luận tập nghiệm $S = \\{...\\}$.`;
+  }
+
+  return `${passHeader}Bạn là một Chuyên gia số hóa và phiên âm tài liệu Toán học viết tay sang LaTeX chuẩn mực tại Việt Nam.
 Nhiệm vụ của bạn là đọc hình ảnh bài làm viết tay của học sinh ${studentName ? `"${studentName}"` : ''} và chuyển đổi chính xác 100% toàn bộ nội dung thành văn bản Markdown kết hợp công thức chuẩn LaTeX.
 
-═══════════════════════════════════════════════════════════
+${passFocus ? passFocus + '\n\n' : ''}═══════════════════════════════════════════════════════════
 CẢNH BÁO TỐI QUAN TRỌNG: CHỐNG THIÊN KIẾN TỰ ĐỘNG SỬA SAI
 ═══════════════════════════════════════════════════════════
 • TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ ĐỘNG SỬA LỖI TOÁN HỌC CỦA HỌC SINH (ANTI AUTO-CORRECT BIAS):
@@ -88,23 +125,30 @@ Hãy trả về toàn bộ bản phiên âm văn bản và công thức toán h�
 }
 
 /**
- * Prompt to compare and reconcile 3 model OCR outputs against the original image
+ * Prompt to compare and reconcile multiple OCR outputs (across 3 passes or 3 models) against the original image
  */
 export function buildOcrConsensusPrompt(
-  geminiText: string,
-  claudeText: string,
-  openaiText: string,
+  geminiOrList: string | Array<{ label: string; text: string }>,
+  claudeText?: string,
+  openaiText?: string,
   studentName?: string,
   qwenText?: string
 ): string {
-  const model4Section = qwenText
-    ? `\n=== KẾT QUẢ OCR TỪ MODEL (Qwen / OpenRouter / Alibaba Cloud) ===\n${qwenText}\n`
-    : '';
+  let modelSections = '';
 
-  return `Bạn là Trọng tài AI chuyên gia thẩm định và đối chiếu văn bản Toán học viết tay.
-Dưới đây là kết quả phiên âm OCR từ các mô hình AI khác nhau (Google Gemini, Anthropic Claude, OpenAI, Qwen / OpenRouter / Alibaba Cloud) cho cùng một bài làm viết tay môn Toán của học sinh ${studentName ? `"${studentName}"` : ''}.
-
-=== KẾT QUẢ OCR TỪ MODEL 1 (Google Gemini) ===
+  if (Array.isArray(geminiOrList)) {
+    modelSections = geminiOrList
+      .map(
+        (item, idx) =>
+          `=== KẾT QUẢ ĐỌC ${idx + 1} (${item.label}) ===\n${item.text || '(Không có kết quả)'}`
+      )
+      .join('\n\n');
+  } else {
+    const geminiText = geminiOrList;
+    const model4Section = qwenText
+      ? `\n=== KẾT QUẢ OCR TỪ MODEL (Qwen / OpenRouter / Alibaba Cloud) ===\n${qwenText}\n`
+      : '';
+    modelSections = `=== KẾT QUẢ OCR TỪ MODEL 1 (Google Gemini) ===
 ${geminiText || '(Không có kết quả)'}
 
 === KẾT QUẢ OCR TỪ MODEL 2 (Anthropic Claude) ===
@@ -112,11 +156,18 @@ ${claudeText || '(Không có kết quả)'}
 
 === KẾT QUẢ OCR TỪ MODEL 3 (OpenAI GPT-4o / Model 3) ===
 ${openaiText || '(Không có kết quả)'}
-${model4Section}
+${model4Section}`;
+  }
+
+  return `Bạn là Trọng tài AI chuyên gia thẩm định và đối chiếu văn bản Toán học viết tay.
+Dưới đây là các bản phiên âm OCR (từ các mô hình AI hoặc các lượt đọc chuyên sâu) cho cùng một bài làm viết tay môn Toán của học sinh ${studentName ? `"${studentName}"` : ''}.
+
+${modelSections}
+
 ═══════════════════════════════════════════════════════════
-NHIỆM VỤ ĐỐI CHIẾU & HỢP NHẤT (CONSENSUS)
+NHIỆM VỤ ĐỐI CHIẾU & HỢP NHẤT (CONSENSUS & VERIFICATION)
 ═══════════════════════════════════════════════════════════
-1. Hãy so sánh từng dòng, từng công thức, từng ký hiệu toán học giữa 3 bản đọc trên cùng với hình ảnh gốc viết tay đính kèm.
+1. Hãy so sánh từng dòng, từng công thức, từng ký hiệu toán học giữa các bản đọc trên cùng với hình ảnh gốc viết tay đính kèm.
 
 2. CẢNH BÁO ĐẶC BIỆT VỀ THIÊN KIẾN TỰ ĐỘNG SỬA SAI (AUTO-CORRECT BIAS):
    • Các mô hình AI ngôn ngữ lớn thường bị thiên kiến "nghĩ thay học sinh" và tự động sửa $x \\ge 0$ thành $x > 0$ vì biết theo lý thuyết logarit cần $x > 0$.
@@ -124,16 +175,16 @@ NHIỆM VỤ ĐỐI CHIẾU & HỢP NHẤT (CONSENSUS)
      Nếu trên ảnh nét mực học sinh viết có nét gạch ngang hoặc gạch xiên dưới dấu > (tức là dấu $\\ge$ hoặc $\\geqslant$, như $\\langle x \\ge 0 \\rangle$), BẮT BUỘC PHẢI CHỐT LÀ "$x \\ge 0$" (hoặc "$x \\geqslant 0$")!
      TUYỆT ĐỐI KHÔNG ĐƯỢC CHẤP NHẬN bản đọc "$x > 0$" của model bị thiên kiến. Phát hiện học sinh viết sai điều kiện là căn cứ quan trọng nhất để giáo viên chấm điểm.
 
-3. Xác định các điểm khác biệt khác (nếu có) giữa 3 model:
+3. Xác định các điểm khác biệt khác (nếu có) giữa các bản đọc:
    • Khác biệt về ký hiệu: dấu so sánh (>, >=, >= vs >), số mũ, chỉ số dưới, biến số (x, t, z, 2).
-   • Khác biệt về dòng: có model nào đọc sót dòng biến đổi, điều kiện hoặc kết luận hay không.
+   • Khác biệt về dòng: có bản nào đọc sót dòng biến đổi, điều kiện hoặc kết luận hay không.
 
 4. Tổng hợp thành bản "consensusText" hoàn hảo, chuẩn hóa LaTeX, giữ nguyên các bước làm trung thực của học sinh.
 
 Trả về kết quả dưới định dạng JSON duy nhất (không bọc text ngoài JSON):
 {
   "consensusText": "Văn bản bài làm hoàn chỉnh nhất đã đối chiếu, chuẩn LaTeX $...$ và $$...$$",
-  "comparisonSummary": "Tóm tắt ngắn gọn (2-3 câu) về độ đồng thuận giữa 3 model (chỉ rõ đã xử lý các điểm sai lệch ra sao, ví dụ: 'Học sinh viết x >= 0 có nét gạch dưới, một số model bị thiên kiến đọc thành x > 0 nhưng bản hợp nhất đã giữ đúng x >= 0 theo nét mực thực tế')",
+  "comparisonSummary": "Tóm tắt ngắn gọn (2-3 câu) về độ đồng thuận giữa các lượt đọc (chỉ rõ đã xử lý các điểm sai lệch ra sao, ví dụ: 'Học sinh viết x >= 0 có nét gạch dưới, đã giữ đúng x >= 0 theo nét mực thực tế')",
   "hasDiscrepancies": boolean,
   "discrepancies": [
     "Mô tả điểm khác biệt 1 và cách đã giải quyết dựa trên ảnh...",

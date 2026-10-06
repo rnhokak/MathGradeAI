@@ -511,7 +511,9 @@ export async function transcribeImageWithGemini(
   studentName: string,
   settings: TeacherSettings,
   apiKey: string,
-  backupApiKey?: string
+  backupApiKey?: string,
+  pass?: 1 | 2 | 3,
+  promptOverride?: string
 ): Promise<{ transcription: string; modelUsed: string }> {
   if (!apiKey) {
     throw new Error(
@@ -534,7 +536,7 @@ export async function transcribeImageWithGemini(
     }
   }
 
-  const promptText = buildMathOcrPrompt(studentName);
+  const promptText = promptOverride || buildMathOcrPrompt(studentName, pass);
   contents.push(promptText);
 
   const userModel = settings.geminiModel || settings.model || process.env.GEMINI_MODEL || 'gemini-3.6-flash';
@@ -586,7 +588,9 @@ export async function transcribeImageWithClaude(
   studentName: string,
   settings: TeacherSettings,
   apiKey: string,
-  backupApiKey?: string
+  backupApiKey?: string,
+  pass?: 1 | 2 | 3,
+  promptOverride?: string
 ): Promise<{ transcription: string; modelUsed: string }> {
   if (!apiKey) {
     throw new Error('Chưa cấu hình Anthropic Claude API Key.');
@@ -608,7 +612,7 @@ export async function transcribeImageWithClaude(
     model = 'claude-opus-4-7';
   }
 
-  const promptText = buildMathOcrPrompt(studentName);
+  const promptText = promptOverride || buildMathOcrPrompt(studentName, pass);
   const contentBlocks: any[] = [];
 
   for (const imgUrl of images) {
@@ -725,7 +729,9 @@ export async function transcribeImageWithOpenAI(
   studentName: string,
   settings: TeacherSettings,
   apiKey: string,
-  backupApiKey?: string
+  backupApiKey?: string,
+  pass?: 1 | 2 | 3,
+  promptOverride?: string
 ): Promise<{ transcription: string; modelUsed: string }> {
   if (!apiKey) {
     throw new Error('Chưa cấu hình OpenAI API Key.');
@@ -737,7 +743,7 @@ export async function transcribeImageWithOpenAI(
     'https://api.openai.com/v1'
   ).replace(/\/+$/, '');
   const model = settings.openaiModel || process.env.OPENAI_MODEL || 'gpt-4o';
-  const promptText = buildMathOcrPrompt(studentName);
+  const promptText = promptOverride || buildMathOcrPrompt(studentName, pass);
 
   const userContents: any[] = [
     {
@@ -798,7 +804,7 @@ export async function transcribeImageWithOpenAI(
 
 /**
  * Transcribe math handwritten images using Qwen on OpenRouter.ai
- * Supports vision models (qwen/qwen-2.5-vl-72b-instruct:free, qwen/qwen-2.5-vl-72b-instruct, etc.)
+ * Supports vision models (qwen/qwen3.8-27b, qwen/qwen3-vl-235b-a22b-instruct, qwen/qwen3.8-flash, etc.)
  * Supports reasoning: { enabled: true } and extracts reasoning_details / <think> tags.
  */
 export async function transcribeImageWithOpenRouter(
@@ -806,25 +812,20 @@ export async function transcribeImageWithOpenRouter(
   studentName: string,
   settings: TeacherSettings,
   apiKey: string,
-  backupApiKey?: string
+  backupApiKey?: string,
+  pass?: 1 | 2 | 3,
+  promptOverride?: string,
+  modelOverride?: string
 ): Promise<{ transcription: string; modelUsed: string; reasoning?: string }> {
   if (!apiKey) {
     throw new Error('Chưa cấu hình OpenRouter API Key.');
   }
 
-  const client = createOpenRouterClient(apiKey, settings.openrouterBaseUrl);
-  let model = settings.openrouterModel || process.env.OPENROUTER_MODEL || 'qwen/qwen-2.5-vl-72b-instruct:free';
+  const rawModel = modelOverride || settings.openrouterModel || process.env.OPENROUTER_MODEL || 'qwen/qwen3.8-27b';
+  // Luôn đảm bảo sử dụng mô hình Qwen OpenRouter có tính phí (Paid), loại bỏ đuôi :free nếu có
+  const model = rawModel.replace(/:free$/i, '');
 
-  // OCR handwriting requires vision capabilities. If a pure text model is selected, fallback to Qwen 2.5 VL
-  const isPureText = /qwen3\.8|coder|qwq-32b-preview/i.test(model) && !/vl/i.test(model);
-  if (isPureText) {
-    console.log(
-      `[OpenRouter OCR] Model "${model}" là model văn bản thuần, tự động chuyển sang "qwen/qwen-2.5-vl-72b-instruct:free" để đọc nét chữ viết tay.`
-    );
-    model = 'qwen/qwen-2.5-vl-72b-instruct:free';
-  }
-
-  const promptText = buildMathOcrPrompt(studentName);
+  const promptText = promptOverride || buildMathOcrPrompt(studentName, pass);
   const userContents: any[] = [
     {
       type: 'text',
@@ -840,6 +841,46 @@ export async function transcribeImageWithOpenRouter(
     });
   }
 
+  // 1. Thử gọi trực tiếp qua @openrouter/sdk (Chuẩn official SDK)
+  try {
+    const orSdk = createOpenRouterSdk(apiKey, settings.openrouterBaseUrl);
+    const sdkRes: any = await orSdk.chat.send({
+      model,
+      messages: [
+        {
+          role: 'user',
+          content: userContents,
+        },
+      ],
+    } as any);
+
+    const content = sdkRes?.choices?.[0]?.message?.content;
+    if (content && typeof content === 'string' && content.trim().length > 0) {
+      let cleaned = content.trim();
+      let reasoning: string | undefined;
+      const thinkMatch = cleaned.match(/<think>([\s\S]*?)<\/think>/i);
+      if (thinkMatch) {
+        reasoning = thinkMatch[1].trim();
+        cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/i, '').trim();
+      }
+      cleaned = cleaned
+        .replace(/^```latex\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim();
+
+      return {
+        transcription: cleaned,
+        modelUsed: model,
+        reasoning,
+      };
+    }
+  } catch (sdkErr: any) {
+    console.warn(`[OpenRouter SDK OCR] ${model} gọi qua SDK (${sdkErr.message || sdkErr}), chuyển sang OpenAI-compat client...`);
+  }
+
+  // 2. Fallback sang OpenAI client
+  const client = createOpenRouterClient(apiKey, settings.openrouterBaseUrl);
   const enableReasoning = settings.openrouterReasoning !== false;
   const requestPayload: any = {
     model,
@@ -863,20 +904,9 @@ export async function transcribeImageWithOpenRouter(
   } catch (err: any) {
     const errorMsg = err.message || '';
     if (/invalid api key|unauthorized|401/i.test(errorMsg) && backupApiKey && backupApiKey !== apiKey) {
-      return transcribeImageWithOpenRouter(images, studentName, settings, backupApiKey);
+      return transcribeImageWithOpenRouter(images, studentName, settings, backupApiKey, undefined, pass, promptOverride, modelOverride);
     }
-    // If free model fails due to 429 rate limit or busy, try non-free qwen/qwen-2.5-vl-72b-instruct
-    if (model.includes(':free') && /rate limit|429|busy|unavailable|quota|temporarily/i.test(errorMsg)) {
-      console.warn(`[OpenRouter OCR] Model ${model} gặp giới hạn tần suất, tự động chuyển sang qwen/qwen-2.5-vl-72b-instruct...`);
-      requestPayload.model = 'qwen/qwen-2.5-vl-72b-instruct';
-      model = 'qwen/qwen-2.5-vl-72b-instruct';
-      try {
-        apiResponse = await (client.chat.completions.create as any)(requestPayload);
-      } catch (retryPaidErr: any) {
-        throw new Error(`OpenRouter (${model}) OCR lỗi: ${retryPaidErr.message || errorMsg}`);
-      }
-    } else if (requestPayload.reasoning && /reasoning|parameter/i.test(errorMsg)) {
-      // If reasoning parameter causes issues on a specific proxy, retry without reasoning
+    if (requestPayload.reasoning && /reasoning|parameter/i.test(errorMsg)) {
       delete requestPayload.reasoning;
       requestPayload.temperature = 0.0;
       apiResponse = await (client.chat.completions.create as any)(requestPayload);
@@ -923,7 +953,9 @@ export async function transcribeImageWithAlibabaCloud(
   studentName: string,
   settings: TeacherSettings,
   apiKey: string,
-  backupApiKey?: string
+  backupApiKey?: string,
+  pass?: 1 | 2 | 3,
+  promptOverride?: string
 ): Promise<{ transcription: string; modelUsed: string; reasoning?: string }> {
   if (!apiKey) {
     throw new Error('Chưa cấu hình Alibaba Cloud Model Studio API Key.');
@@ -940,7 +972,7 @@ export async function transcribeImageWithAlibabaCloud(
     model = 'qwen-vl-max';
   }
 
-  const promptText = buildMathOcrPrompt(studentName);
+  const promptText = promptOverride || buildMathOcrPrompt(studentName, pass);
   const userContents: any[] = [
     {
       type: 'text',
@@ -1026,13 +1058,16 @@ export async function transcribeWithThreeModelsAndConsensus(
     claude?: string;
     openai?: string;
     openrouter?: string;
+    alibabacloud?: string;
   },
   backupKeys?: {
     gemini?: string;
     claude?: string;
     openai?: string;
     openrouter?: string;
-  }
+    alibabacloud?: string;
+  },
+  ocrPasses?: 1 | 3
 ): Promise<{ ocrComparison: OcrComparisonReport; consensusText: string }> {
   if (!submission.images || submission.images.length === 0) {
     return {
@@ -1058,182 +1093,140 @@ export async function transcribeWithThreeModelsAndConsensus(
   const effectiveClaudeKey = apiKeys.claude || backupKeys?.claude;
   const effectiveOpenaiKey = apiKeys.openai || backupKeys?.openai;
   const effectiveOpenrouterKey = apiKeys.openrouter || backupKeys?.openrouter;
-  const effectiveAlibabaKey = (apiKeys as any).alibabacloud || (backupKeys as any)?.alibabacloud;
+  const effectiveAlibabaKey = apiKeys.alibabacloud || backupKeys?.alibabacloud;
 
+  const effectivePasses: 1 | 3 = ocrPasses ?? settings.ocrPasses ?? 3;
+
+  // ----------------------------------------------------
+  // CHẾ ĐỘ 1: ĐỌC OCR 1 LẦN NHANH (Qwen OpenRouter Paid)
+  // ----------------------------------------------------
+  const userOpenRouterModel = (settings.openrouterModel || process.env.OPENROUTER_MODEL || 'qwen/qwen3.8-27b').replace(/:free$/i, '');
+
+  if (effectivePasses === 1) {
+    let singlePromise: Promise<{ transcription: string; modelUsed: string }>;
+    let chosenProvider: AIProvider = 'openrouter';
+
+    if (effectiveOpenrouterKey) {
+      singlePromise = transcribeImageWithOpenRouter(
+        submission.images,
+        submission.studentName,
+        settings,
+        effectiveOpenrouterKey,
+        backupKeys?.openrouter,
+        1,
+        undefined,
+        userOpenRouterModel
+      );
+    } else if (effectiveClaudeKey) {
+      chosenProvider = 'claude';
+      singlePromise = transcribeImageWithClaude(submission.images, submission.studentName, settings, effectiveClaudeKey, backupKeys?.claude, 1);
+    } else if (effectiveGeminiKey) {
+      chosenProvider = 'gemini';
+      singlePromise = transcribeImageWithGemini(submission.images, submission.studentName, settings, effectiveGeminiKey, backupKeys?.gemini, 1);
+    } else if (effectiveOpenaiKey) {
+      chosenProvider = 'openai';
+      singlePromise = transcribeImageWithOpenAI(submission.images, submission.studentName, settings, effectiveOpenaiKey, backupKeys?.openai, 1);
+    } else {
+      throw new Error('Chưa cấu hình OpenRouter API Key để nhận diện công thức toán.');
+    }
+
+    const singleRes = await singlePromise;
+    return {
+      consensusText: singleRes.transcription,
+      ocrComparison: {
+        status: 'single_model',
+        modelsUsed: [singleRes.modelUsed],
+        results: [
+          {
+            provider: chosenProvider,
+            modelName: singleRes.modelUsed,
+            transcription: singleRes.transcription,
+          },
+        ],
+        consensusText: singleRes.transcription,
+        comparisonSummary: `Đã nhận diện nhanh 1 lượt bằng ${singleRes.modelUsed}.`,
+        hasDiscrepancies: false,
+        arbitratedBy: `Single-Pass OCR (${singleRes.modelUsed})`,
+      },
+    };
+  }
+
+  // ----------------------------------------------------
+  // CHẾ ĐỘ 2: ĐỌC OCR 3 LẦN BẰNG 3 BẢN QWEN (qwen3-vl-235b, qwen3.8-27b, qwen3.8-flash)
+  // ----------------------------------------------------
   const tasks: {
     provider: AIProvider;
     name: string;
     promise: Promise<{ transcription: string; modelUsed: string }>;
   }[] = [];
 
-  // Model 1: Google Gemini
-  if (effectiveGeminiKey) {
-    tasks.push({
-      provider: 'gemini',
-      name: 'Google Gemini',
-      promise: transcribeImageWithGemini(
-        submission.images,
-        submission.studentName,
-        settings,
-        effectiveGeminiKey,
-        backupKeys?.gemini
-      ),
-    });
-  }
-
-  // Model 2: Anthropic Claude
-  if (effectiveClaudeKey) {
-    tasks.push({
-      provider: 'claude',
-      name: 'Anthropic Claude',
-      promise: transcribeImageWithClaude(
-        submission.images,
-        submission.studentName,
-        settings,
-        effectiveClaudeKey,
-        backupKeys?.claude
-      ),
-    });
-  }
-
-  // Model 3: OpenAI GPT-4o (kèm tự động dự phòng sang OpenRouter/Gemini nếu OpenAI hết hạn mức hoặc lỗi)
-  if (effectiveOpenaiKey) {
-    tasks.push({
-      provider: 'openai',
-      name: 'OpenAI (GPT-4o)',
-      promise: transcribeImageWithOpenAI(
-        submission.images,
-        submission.studentName,
-        settings,
-        effectiveOpenaiKey,
-        backupKeys?.openai
-      ).catch(async (openAiErr) => {
-        if (effectiveOpenrouterKey) {
-          console.warn(
-            `[OCR Fallback] OpenAI gặp lỗi (${openAiErr.message}). Tự động dùng Qwen (OpenRouter) làm Model thứ 3.`
-          );
-          const res = await transcribeImageWithOpenRouter(
-            submission.images,
-            submission.studentName,
-            settings,
-            effectiveOpenrouterKey,
-            backupKeys?.openrouter
-          );
-          return {
-            transcription: res.transcription,
-            modelUsed: `${res.modelUsed} (Dự phòng cho OpenAI)`,
-          };
-        }
-        if (effectiveGeminiKey) {
-          console.warn(
-            `[OCR Fallback] OpenAI gặp lỗi (${openAiErr.message}). Tự động dùng Gemini 3.6 Flash làm Model thứ 3.`
-          );
-          const fallbackSettings: TeacherSettings = {
-            ...settings,
-            geminiModel: 'gemini-3.6-flash',
-          };
-          const res = await transcribeImageWithGemini(
-            submission.images,
-            submission.studentName,
-            fallbackSettings,
-            effectiveGeminiKey,
-            backupKeys?.gemini
-          );
-          return {
-            transcription: res.transcription,
-            modelUsed: `${res.modelUsed} (Dự phòng cho OpenAI)`,
-          };
-        }
-        throw openAiErr;
-      }),
-    });
-  } else if (effectiveOpenrouterKey) {
-    // Nếu không có OpenAI key, dùng Qwen (OpenRouter) làm Model thứ 3
+  if (effectiveOpenrouterKey) {
+    // 3 Lượt đọc ảnh chuyên sâu phối hợp 3 model Qwen Paid:
+    // Lần 1: qwen/qwen3-vl-235b-a22b-instruct (Toàn diện & Cấu trúc bài làm)
     tasks.push({
       provider: 'openrouter',
-      name: 'Qwen (OpenRouter)',
+      name: 'Lần 1: Qwen 3 VL 235B (Toàn diện & Cấu trúc)',
       promise: transcribeImageWithOpenRouter(
         submission.images,
         submission.studentName,
         settings,
         effectiveOpenrouterKey,
-        backupKeys?.openrouter
-      ),
+        backupKeys?.openrouter,
+        1,
+        undefined,
+        'qwen/qwen3-vl-235b-a22b-instruct'
+      ).then((res) => ({ transcription: res.transcription, modelUsed: 'Lần 1: Qwen 3 VL 235B (Toàn diện)' })),
     });
-  } else if (effectiveGeminiKey) {
-    const fallbackSettings: TeacherSettings = {
-      ...settings,
-      geminiModel: 'gemini-3.6-flash',
-    };
-    tasks.push({
-      provider: 'gemini',
-      name: 'Gemini (Model 3)',
-      promise: transcribeImageWithGemini(
-        submission.images,
-        submission.studentName,
-        fallbackSettings,
-        effectiveGeminiKey,
-        backupKeys?.gemini
-      ).then((res) => ({
-        transcription: res.transcription,
-        modelUsed: `${res.modelUsed} (Model 3)`,
-      })),
-    });
-  }
 
-  // Nếu cả 3 model đều có và có cả OpenRouter, thêm OpenRouter làm mô hình thẩm định độc lập
-  if (
-    effectiveOpenrouterKey &&
-    !tasks.some((t) => t.provider === 'openrouter')
-  ) {
+    // Lần 2: qwen/qwen3.8-27b (Soi nét mực, điều kiện xác định & ký hiệu viết tay)
     tasks.push({
       provider: 'openrouter',
-      name: 'Qwen (OpenRouter)',
+      name: 'Lần 2: Qwen 3.8 27B (Soi nét mực & ĐKXĐ)',
       promise: transcribeImageWithOpenRouter(
         submission.images,
         submission.studentName,
         settings,
         effectiveOpenrouterKey,
-        backupKeys?.openrouter
-      ),
+        backupKeys?.openrouter,
+        2,
+        undefined,
+        'qwen/qwen3.8-27b'
+      ).then((res) => ({ transcription: res.transcription, modelUsed: 'Lần 2: Qwen 3.8 27B (Soi nét mực & ĐKXĐ)' })),
     });
-  }
 
-  // Nếu có Alibaba Cloud key và đang chọn hoặc dùng vision model, thêm Alibaba Cloud OCR
-  if (
-    effectiveAlibabaKey &&
-    !tasks.some((t) => t.provider === 'alibabacloud') &&
-    (/vl/i.test(settings.alibabacloudModel || '') || settings.provider === 'alibabacloud')
-  ) {
+    // Lần 3: qwen/qwen3.8-flash (Rà soát công thức toán học & logic biến đổi siêu tốc)
     tasks.push({
-      provider: 'alibabacloud',
-      name: 'Qwen (Alibaba Cloud)',
-      promise: transcribeImageWithAlibabaCloud(
+      provider: 'openrouter',
+      name: 'Lần 3: Qwen 3.8 Flash (Công thức & Biến đổi)',
+      promise: transcribeImageWithOpenRouter(
         submission.images,
         submission.studentName,
         settings,
-        effectiveAlibabaKey,
-        (backupKeys as any)?.alibabacloud
-      ),
+        effectiveOpenrouterKey,
+        backupKeys?.openrouter,
+        3,
+        undefined,
+        'qwen/qwen3.8-flash'
+      ).then((res) => ({ transcription: res.transcription, modelUsed: 'Lần 3: Qwen 3.8 Flash (Công thức & Biến đổi)' })),
     });
-  }
+  } else {
+    // Fallback dự phòng nếu chưa có OpenRouter Key
+    const available = [
+      effectiveClaudeKey ? { p: 'claude' as AIProvider, k: effectiveClaudeKey, b: backupKeys?.claude } : null,
+      effectiveGeminiKey ? { p: 'gemini' as AIProvider, k: effectiveGeminiKey, b: backupKeys?.gemini } : null,
+      effectiveOpenaiKey ? { p: 'openai' as AIProvider, k: effectiveOpenaiKey, b: backupKeys?.openai } : null,
+    ].filter(Boolean) as Array<{ p: AIProvider; k: string; b?: string }>;
 
-  if (tasks.length === 0) {
-    if (effectiveAlibabaKey) {
-      tasks.push({
-        provider: 'alibabacloud',
-        name: 'Qwen (Alibaba Cloud)',
-        promise: transcribeImageWithAlibabaCloud(
-          submission.images,
-          submission.studentName,
-          settings,
-          effectiveAlibabaKey,
-          (backupKeys as any)?.alibabacloud
-        ),
-      });
-    } else {
-      throw new Error('Chưa cấu hình API Key nào (Gemini, Claude, OpenAI, OpenRouter hoặc Alibaba Cloud) để nhận diện công thức toán từ ảnh.');
+    if (available.length === 0) {
+      throw new Error('Chưa cấu hình OpenRouter API Key để nhận diện công thức toán.');
     }
+
+    const sole = available[0];
+    tasks.push({
+      provider: sole.p,
+      name: `Lần 1 (${sole.p.toUpperCase()})`,
+      promise: transcribeImageWithOpenAI(submission.images, submission.studentName, settings, sole.k, sole.b, 1),
+    });
   }
 
   const settled = await Promise.allSettled(tasks.map((t) => t.promise));
@@ -1248,7 +1241,7 @@ export async function transcribeWithThreeModelsAndConsensus(
         transcription: res.value.transcription,
       });
     } else {
-      console.warn(`[OCR 3-Model] ${t.name} OCR thất bại:`, res.reason?.message || res.reason);
+      console.warn(`[OCR 3-Pass] ${t.name} OCR thất bại:`, res.reason?.message || res.reason);
       modelResults.push({
         provider: t.provider,
         modelName: t.name,
@@ -1262,49 +1255,57 @@ export async function transcribeWithThreeModelsAndConsensus(
 
   if (successfulResults.length === 0) {
     throw new Error(
-      `Không thể đọc văn bản từ ảnh bằng các model AI: ${modelResults.map((r) => `${r.modelName}: ${r.error}`).join(' | ')}`
+      `Không thể đọc văn bản từ ảnh qua các lượt OCR: ${modelResults.map((r) => `${r.modelName}: ${r.error}`).join(' | ')}`
     );
   }
 
-  if (successfulResults.length === 1) {
-    const single = successfulResults[0];
-    return {
-      consensusText: single.transcription,
-      ocrComparison: {
-        status: 'single_model',
-        modelsUsed: [single.modelName],
-        results: modelResults,
-        consensusText: single.transcription,
-        comparisonSummary: `Chỉ có 1 model (${single.modelName}) nhận diện thành công. Đã sử dụng trực tiếp kết quả này.`,
-        hasDiscrepancies: false,
-      },
-    };
-  }
-
-  // Reconciliation pass: Compare transcriptions against the image
-  const geminiText = modelResults.find((r) => r.provider === 'gemini' && !r.error)?.transcription || '';
-  const claudeText = modelResults.find((r) => r.provider === 'claude' && !r.error)?.transcription || '';
-  const openaiText =
-    modelResults.find((r) => r.provider === 'openai' && !r.error)?.transcription ||
-    modelResults.filter((r) => r.provider === 'gemini' && !r.error)[1]?.transcription ||
-    '';
-  const openrouterText = modelResults.find((r) => r.provider === 'openrouter' && !r.error)?.transcription || '';
+  // BƯỚC THẨM ĐỊNH & VERIFY (Consensus & Verification Pass):
+  // Gửi cả 3 bản đọc cùng ảnh bài làm vào prompt đối chiếu
+  const arbitrationPrompt = buildOcrConsensusPrompt(
+    successfulResults.map((r) => ({ label: r.modelName, text: r.transcription })),
+    undefined,
+    undefined,
+    submission.studentName
+  );
 
   let consensusText = successfulResults[0].transcription;
-  let comparisonSummary = 'Đã đối chiếu và hợp nhất các bản đọc từ các model AI.';
+  let comparisonSummary = `Đã đối chiếu và hợp nhất thành công từ ${successfulResults.length} bản đọc OCR.`;
   let hasDiscrepancies = false;
   let discrepancies: string[] = [];
+  let arbitratedBy = 'AI Verification';
 
   try {
-    const arbitrationPrompt = buildOcrConsensusPrompt(
-      geminiText,
-      claudeText,
-      openaiText,
-      submission.studentName,
-      openrouterText
-    );
+    // 1. Ưu tiên OpenRouter Qwen 3 VL 235B cho Thẩm định & Verify (Consensus Pass) nếu có key
+    if (effectiveOpenrouterKey) {
+      try {
+        const client = createOpenRouterClient(effectiveOpenrouterKey, settings.openrouterBaseUrl);
+        const arbModel = 'qwen/qwen3-vl-235b-a22b-instruct';
+        const userContents: any[] = [{ type: 'text', text: arbitrationPrompt }];
+        for (const imgUrl of submission.images) {
+          const formattedUrl = imgUrl.startsWith('data:') ? imgUrl : `data:image/jpeg;base64,${imgUrl}`;
+          userContents.push({ type: 'image_url', image_url: { url: formattedUrl, detail: 'high' } });
+        }
+        const arbRes: any = await (client.chat.completions.create as any)({
+          model: arbModel,
+          messages: [{ role: 'user', content: userContents }],
+          temperature: 0.0,
+        });
+        const rawText = arbRes?.choices?.[0]?.message?.content || '';
+        const parsedArb = extractJsonFromText(rawText);
+        if (parsedArb.consensusText) {
+          consensusText = parsedArb.consensusText;
+          if (parsedArb.comparisonSummary) comparisonSummary = parsedArb.comparisonSummary;
+          hasDiscrepancies = Boolean(parsedArb.hasDiscrepancies);
+          discrepancies = Array.isArray(parsedArb.discrepancies) ? parsedArb.discrepancies : [];
+          arbitratedBy = 'Qwen 3 VL 235B Verification';
+        }
+      } catch (orArbErr: any) {
+        console.warn('[OCR Arbitration OpenRouter] gặp lỗi:', orArbErr.message || orArbErr);
+      }
+    }
 
-    if (effectiveGeminiKey) {
+    // 2. Dự phòng Gemini cho Arbitration nếu chưa hoàn tất
+    if ((arbitratedBy === 'AI Verification' || !consensusText) && effectiveGeminiKey) {
       const ai = new GoogleGenAI({ apiKey: effectiveGeminiKey });
       const contents: any[] = [];
       for (const imgUrl of submission.images) {
@@ -1318,10 +1319,9 @@ export async function transcribeWithThreeModelsAndConsensus(
       contents.push(arbitrationPrompt);
 
       const arbCandidates = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.8-flash'];
-      let arbResponse: any = null;
       for (const m of arbCandidates) {
         try {
-          arbResponse = await ai.models.generateContent({
+          const arbResponse = await ai.models.generateContent({
             model: m,
             contents,
             config: {
@@ -1329,27 +1329,23 @@ export async function transcribeWithThreeModelsAndConsensus(
               temperature: 0.0,
             },
           });
-          break;
+          const parsedArb = extractJsonFromText(arbResponse.text || '');
+          if (parsedArb.consensusText) {
+            consensusText = parsedArb.consensusText;
+            if (parsedArb.comparisonSummary) comparisonSummary = parsedArb.comparisonSummary;
+            hasDiscrepancies = Boolean(parsedArb.hasDiscrepancies);
+            discrepancies = Array.isArray(parsedArb.discrepancies) ? parsedArb.discrepancies : [];
+            arbitratedBy = `Gemini (${m}) Verification`;
+            break;
+          }
         } catch (e: any) {
-          console.warn(`[OCR Arbitration] ${m} gặp lỗi:`, e.message || e);
+          console.warn(`[OCR Arbitration Gemini] ${m} gặp lỗi:`, e.message || e);
         }
-      }
-
-      if (arbResponse) {
-        const parsedArb = extractJsonFromText(arbResponse.text || '');
-        if (parsedArb.consensusText) {
-          consensusText = parsedArb.consensusText;
-        }
-        if (parsedArb.comparisonSummary) {
-          comparisonSummary = parsedArb.comparisonSummary;
-        }
-        hasDiscrepancies = Boolean(parsedArb.hasDiscrepancies);
-        discrepancies = Array.isArray(parsedArb.discrepancies) ? parsedArb.discrepancies : [];
       }
     }
 
-    // Fallback to Claude for arbitration if Gemini did not produce a consensus
-    if ((!consensusText || consensusText === successfulResults[0].transcription) && effectiveClaudeKey) {
+    // 3. Dự phòng Claude cho Arbitration nếu chưa xong
+    if ((arbitratedBy === 'AI Verification' || !consensusText) && effectiveClaudeKey) {
       try {
         const contentBlocks: any[] = [];
         for (const imgUrl of submission.images) {
@@ -1388,30 +1384,26 @@ export async function transcribeWithThreeModelsAndConsensus(
             rawText = claudeData.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n');
           } else if (typeof claudeData.content === 'string') {
             rawText = claudeData.content;
-          } else if (claudeData.choices && claudeData.choices[0]?.message) {
-            rawText = claudeData.choices[0].message.content || '';
-          } else if (claudeData.choices && claudeData.choices[0]?.text) {
-            rawText = claudeData.choices[0].text;
           }
           const parsedArb = extractJsonFromText(rawText);
           if (parsedArb.consensusText) {
             consensusText = parsedArb.consensusText;
+            if (parsedArb.comparisonSummary) comparisonSummary = parsedArb.comparisonSummary;
+            hasDiscrepancies = Boolean(parsedArb.hasDiscrepancies);
+            discrepancies = Array.isArray(parsedArb.discrepancies) ? parsedArb.discrepancies : [];
+            arbitratedBy = 'Claude Opus 5 Verification';
           }
-          if (parsedArb.comparisonSummary) {
-            comparisonSummary = parsedArb.comparisonSummary;
-          }
-          hasDiscrepancies = Boolean(parsedArb.hasDiscrepancies);
-          discrepancies = Array.isArray(parsedArb.discrepancies) ? parsedArb.discrepancies : [];
         }
       } catch (claudeArbErr: any) {
-        console.warn('[OCR Reconciliation] Claude arbitration fallback error:', claudeArbErr.message || claudeArbErr);
+        console.warn('[OCR Arbitration Claude] gặp lỗi:', claudeArbErr.message || claudeArbErr);
       }
     }
+
   } catch (arbErr) {
     console.warn('[OCR Reconciliation] Lỗi trong bước đối chiếu tự động, sử dụng bản đọc chi tiết nhất:', arbErr);
     const sortedByLength = [...successfulResults].sort((a, b) => b.transcription.length - a.transcription.length);
     consensusText = sortedByLength[0].transcription;
-    comparisonSummary = 'Đã hợp nhất từ bản đọc chi tiết nhất của các model.';
+    comparisonSummary = 'Đã hợp nhất từ bản đọc chi tiết nhất của các lượt OCR.';
   }
 
   const ocrReport: OcrComparisonReport = {
@@ -1422,7 +1414,7 @@ export async function transcribeWithThreeModelsAndConsensus(
     comparisonSummary,
     hasDiscrepancies,
     discrepancies,
-    arbitratedBy: 'Gemini 3.8 Flash Cross-Verification',
+    arbitratedBy,
   };
 
   return {
@@ -1800,17 +1792,26 @@ export async function gradeWithOpenRouterCustomPrompt(
   settings: TeacherSettings,
   apiKey: string,
   backupApiKey?: string,
-  temperature: number = 0.1
+  temperature: number = 0.1,
+  forceDeepReasoning: boolean = false
 ): Promise<{ gradingResult: GradingResult; modelUsed: string; reasoning?: string; rawOutput: string }> {
   if (!apiKey) {
     throw new Error('Chưa cấu hình OpenRouter API Key.');
   }
 
-  const model = settings.openrouterModel || process.env.OPENROUTER_MODEL || 'qwen/qwen3.8-flash';
+  // Chấm bài mặc định bằng qwen/qwen3.8-27b; khi chấm 3 lần hoặc kích hoạt tư duy sâu thì bắt buộc dùng qwen/qwen3.8-27b
+  const model = forceDeepReasoning
+    ? 'qwen/qwen3.8-27b'
+    : (settings.openrouterModel || process.env.OPENROUTER_MODEL || 'qwen/qwen3.8-27b');
   const isVisionModel = /vl/i.test(model);
 
+  let finalPrompt = promptText;
+  if (forceDeepReasoning) {
+    finalPrompt += `\n\n═══════════════════════════════════════════════════════════\nKÍCH HOẠT CHẾ ĐỘ TƯ DUY SÂU (DEEP REASONING / CHAIN-OF-THOUGHT)\n═══════════════════════════════════════════════════════════\nBạn đang chấm bài ở chế độ Tư Duy Sâu (Deep Reasoning). Hãy mở rộng chuỗi suy luận từng bước (<think>...</think>), rà soát cặn kẽ từng công thức biến đổi, đối chiếu chi tiết từng dòng bài làm của học sinh với barem đáp án, kiểm tra chặt chẽ điều kiện xác định và lỗi ngụy biện trước khi đưa ra kết luận và điểm số.`;
+  }
+
   // Build messages – text only for reasoning models, image_url only for vision models
-  const userContent: any[] = [{ type: 'text', text: promptText }];
+  const userContent: any[] = [{ type: 'text', text: finalPrompt }];
   if (isVisionModel && submission.images && submission.images.length > 0) {
     for (const imgUrl of submission.images) {
       userContent.push({
@@ -1828,13 +1829,18 @@ export async function gradeWithOpenRouterCustomPrompt(
   // Try @openrouter/sdk streaming first (official pattern)
   try {
     const orSdk = createOpenRouterSdk(apiKey, settings.openrouterBaseUrl);
+    const chatRequest: any = {
+      model,
+      messages,
+      stream: true,
+    };
+    if (forceDeepReasoning || settings.openrouterReasoning !== false) {
+      chatRequest.reasoning = { effort: 'high' };
+    }
+
     const stream = await orSdk.chat.send({
-      chatRequest: {
-        model,
-        messages,
-        stream: true,
-      } as any,
-    });
+      chatRequest,
+    } as any);
 
     let textOutput = '';
     let reasoningText: string | undefined;
@@ -1845,15 +1851,15 @@ export async function gradeWithOpenRouterCustomPrompt(
       if (delta?.content) {
         textOutput += delta.content;
       }
-      if (delta?.reasoning) {
-        reasoningText = (reasoningText || '') + delta.reasoning;
+      if (delta?.reasoning || (delta as any)?.reasoning_content) {
+        reasoningText = (reasoningText || '') + (delta?.reasoning || (delta as any)?.reasoning_content);
       }
       if (chunk.usage?.completionTokensDetails?.reasoningTokens !== undefined) {
         reasoningTokens = chunk.usage.completionTokensDetails.reasoningTokens;
       }
     }
 
-    console.log(`[OpenRouter SDK] ${model} streaming done. reasoningTokens=${reasoningTokens ?? 'n/a'}`);
+    console.log(`[OpenRouter SDK] ${model} (Deep Reasoning: ${forceDeepReasoning ? 'HIGH' : 'AUTO'}) streaming done. reasoningTokens=${reasoningTokens ?? 'n/a'}`);
 
     // Extract <think>...</think> if present
     const thinkMatch = textOutput.match(/<think>([\s\S]*?)<\/think>/i);
@@ -1873,7 +1879,7 @@ export async function gradeWithOpenRouterCustomPrompt(
     const sdkMsg = sdkErr.message || '';
     // Propagate auth errors immediately
     if (/invalid api key|unauthorized|401/i.test(sdkMsg) && backupApiKey && backupApiKey !== apiKey) {
-      return gradeWithOpenRouterCustomPrompt(promptText, submission, rubric, settings, backupApiKey, undefined, temperature);
+      return gradeWithOpenRouterCustomPrompt(promptText, submission, rubric, settings, backupApiKey, undefined, temperature, forceDeepReasoning);
     }
     if (/invalid api key|unauthorized|401/i.test(sdkMsg)) {
       throw new Error(`OpenRouter: API Key không hợp lệ (401).`);
@@ -1883,14 +1889,14 @@ export async function gradeWithOpenRouterCustomPrompt(
 
   // Fallback: OpenAI-compat client (for proxies / models that don't support SDK streaming)
   const client = createOpenRouterClient(apiKey, settings.openrouterBaseUrl);
-  const enableReasoning = settings.openrouterReasoning !== false;
+  const enableReasoning = forceDeepReasoning || settings.openrouterReasoning !== false;
   const requestPayload: any = {
     model,
     messages,
     response_format: { type: 'json_object' },
   };
   if (enableReasoning) {
-    requestPayload.reasoning = { enabled: true };
+    requestPayload.reasoning = { effort: 'high', enabled: true };
   } else {
     requestPayload.temperature = temperature;
   }
@@ -2300,7 +2306,7 @@ export async function gradeWithProviderTriplePass(
   const runCustomPrompt = (p: string, temp: number) => {
     switch (provider) {
       case 'openrouter':
-        return gradeWithOpenRouterCustomPrompt(p, submission, rubric, settings, apiKey, backupApiKey, temp);
+        return gradeWithOpenRouterCustomPrompt(p, submission, rubric, settings, apiKey, backupApiKey, temp, true);
       case 'alibabacloud':
         return gradeWithAlibabaCloudCustomPrompt(p, submission, rubric, settings, apiKey, backupApiKey, temp);
       case 'claude':
@@ -2634,7 +2640,7 @@ export async function gradeWithOpenAI(
 }
 
 /**
- * Grade using Qwen on OpenRouter.ai (qwen/qwen3.8-flash, qwen/qwen-2.5-vl-72b-instruct:free, etc.)
+ * Grade using Qwen on OpenRouter.ai (qwen/qwen3.8-27b, qwen/qwen3-vl-235b-a22b-instruct, qwen/qwen3.8-flash, etc.)
  * Uses @openrouter/sdk streaming: openrouter.chat.send({ chatRequest: { model, messages, stream: true } })
  * Preserves reasoning tokens for transparent chain-of-thought.
  */
@@ -2651,7 +2657,7 @@ export async function gradeWithOpenRouter(
     );
   }
 
-  const model = settings.openrouterModel || process.env.OPENROUTER_MODEL || 'qwen/qwen3.8-flash';
+  const model = settings.openrouterModel || process.env.OPENROUTER_MODEL || 'qwen/qwen3.8-27b';
 
   const promptText = buildGradingPrompt(
     rubric,

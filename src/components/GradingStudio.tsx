@@ -155,6 +155,7 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
           body: JSON.stringify({
             submission,
             settings,
+            ocrPasses: settings.ocrPasses ?? 3,
           }),
         });
         const data = await res.json();
@@ -491,7 +492,7 @@ LỜI NHẬN XÉT CỦA GIÁO VIÊN:
                       style={{ fontSize: '0.78rem', padding: '5px 10px' }}
                     >
                       <RefreshCw size={13} className={isReRunningOcr ? 'spin' : ''} />
-                      {isReRunningOcr ? 'Đang OCR 3 Model...' : 'Đọc lại bằng 3 Model'}
+                      {isReRunningOcr ? 'Đang đọc OCR...' : (settings.ocrPasses === 1 ? 'Đọc lại OCR (1 Lần)' : 'Đọc lại OCR & Verify (3 Lần)')}
                     </button>
                   </div>
                 </div>

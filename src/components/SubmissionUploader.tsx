@@ -162,18 +162,20 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
   };
 
   // Grade a single submission directly
-  // Grade a single submission directly (Tự động thử lại tối đa 3 lần nếu gặp lỗi, lỗi 3 lần thì dừng và báo lỗi)
+  // Grade a single submission directly with MANDATORY 2-STEP PIPELINE:
+  // Bước 1: Bắt buộc đọc OCR ảnh trước (3 lần & verify hoặc 1 lần) -> Lấy bài đã có văn bản
+  // Bước 2: Chấm bài bằng AI bằng văn bản đã qua OCR
   const gradeSingleSubmission = async (sub: StudentSubmission) => {
     setActiveSubId(sub.id);
     const mode = settings.gradingMode || 'triple_pass';
     const isTriple = mode === 'triple_consensus';
     const provider = settings.provider || 'openrouter';
-    const passes = settings.modelPasses?.[provider] ?? (mode === 'claude_triple_pass' || mode === 'triple_pass' ? 3 : 1);
+    const passes = settings.gradingPasses ?? (settings.modelPasses?.[provider] ?? 1);
+    const ocrPasses = settings.ocrPasses ?? 3;
     const hasImages = sub.images && sub.images.length > 0;
-    const needsOcr = hasImages && (!sub.extractedText || !sub.ocrComparison) && settings.autoOcrBeforeGrading !== false;
 
     const providerDisplayNames: Record<string, string> = {
-      openrouter: `Qwen (${settings.openrouterModel || '3.8'})`,
+      openrouter: `Qwen (${settings.openrouterModel || '3.8 27B'})`,
       alibabacloud: `Qwen (${settings.alibabacloudModel || 'Alibaba'})`,
       claude: settings.claudeModel || 'Claude Opus 5',
       openai: settings.openaiModel || 'GPT-4o',
@@ -181,18 +183,136 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
     };
     const activeModelName = providerDisplayNames[provider] || provider;
 
-    const baseMessage = needsOcr
-      ? 'Bước 1/2: Đang đọc công thức & chữ viết tay qua AI OCR...'
-      : isTriple
-      ? 'Đang chấm đồng thời 3 Model (Gemini, Claude, GPT-4o)...'
-      : passes === 3
-      ? `Đang chấm 3 lần bằng ${activeModelName} (Barem + Soi lỗi + Sư phạm)...`
-      : `Đang chấm nhanh bằng ${activeModelName}...`;
+    let currentSub = { ...sub };
 
-    const MAX_RETRIES = 3;
+    // =========================================================================
+    // BƯỚC 1: BẮT BUỘC ĐỌC OCR ẢNH TRƯỚC (NẾU BÀI LÀM CÓ ẢNH VÀ CHƯA CÓ OCR)
+    // =========================================================================
+    if (hasImages && (!currentSub.extractedText || !currentSub.ocrComparison)) {
+      const ocrBaseMessage = ocrPasses === 3
+        ? 'Bước 1/2: Đang đọc OCR ảnh 3 lần & verify đối chiếu nét mực...'
+        : 'Bước 1/2: Đang đọc nhanh công thức qua AI OCR (1 lần)...';
+
+      const MAX_OCR_RETRIES = 3;
+      let ocrSuccess = false;
+      let ocrLastError: any = null;
+
+      for (let attempt = 1; attempt <= MAX_OCR_RETRIES; attempt++) {
+        onUpdateSubmissions((prev) =>
+          prev.map((s) =>
+            s.id === sub.id
+              ? {
+                  ...s,
+                  status: 'ocr',
+                  stepMessage:
+                    attempt > 1
+                      ? `[Thử lại OCR ${attempt}/${MAX_OCR_RETRIES}] ${ocrBaseMessage}`
+                      : ocrBaseMessage,
+                  error: undefined,
+                }
+              : s
+          )
+        );
+
+        try {
+          const res = await fetch('/api/ocr', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(settings.geminiApiKey ? { 'x-gemini-api-key': settings.geminiApiKey } : {}),
+              ...(settings.claudeApiKey ? { 'x-claude-api-key': settings.claudeApiKey } : {}),
+              ...(settings.openaiApiKey ? { 'x-openai-api-key': settings.openaiApiKey } : {}),
+              ...(settings.openrouterApiKey ? { 'x-openrouter-api-key': settings.openrouterApiKey } : {}),
+              ...(settings.alibabacloudApiKey ? { 'x-alibabacloud-api-key': settings.alibabacloudApiKey } : {}),
+            },
+            body: JSON.stringify({
+              submission: currentSub,
+              settings,
+              ocrPasses,
+            }),
+          });
+
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || `Lỗi HTTP ${res.status} từ máy chủ khi đọc OCR`);
+          }
+
+          // Cập nhật kết quả OCR đã được verify vào currentSub
+          currentSub = {
+            ...currentSub,
+            extractedText: data.consensusText,
+            ocrComparison: data.ocrComparison,
+          };
+
+          onUpdateSubmissions((prev) =>
+            prev.map((s) =>
+              s.id === sub.id
+                ? {
+                    ...s,
+                    extractedText: data.consensusText,
+                    ocrComparison: data.ocrComparison,
+                  }
+                : s
+            )
+          );
+
+          ocrSuccess = true;
+          break;
+        } catch (err: any) {
+          ocrLastError = err;
+          console.warn(`[OCR ${sub.studentName}] Lần ${attempt}/${MAX_OCR_RETRIES} gặp lỗi:`, err.message || err);
+
+          if (attempt < MAX_OCR_RETRIES) {
+            const delayMs = attempt * 1500;
+            onUpdateSubmissions((prev) =>
+              prev.map((s) =>
+                s.id === sub.id
+                  ? {
+                      ...s,
+                      stepMessage: `Sự cố đọc OCR (${err.message || 'Lỗi mạng'}). Đang thử lại (${attempt + 1}/${MAX_OCR_RETRIES})...`,
+                    }
+                  : s
+              )
+            );
+            await new Promise((r) => setTimeout(r, delayMs));
+          }
+        }
+      }
+
+      if (!ocrSuccess) {
+        console.error(`[OCR thất bại] Không thể đọc ảnh bài làm của ${sub.studentName}:`, ocrLastError);
+        const errText = `Lỗi đọc ảnh OCR sau 3 lần thử: ${ocrLastError?.message || 'Lỗi không xác định'}. Bắt buộc OCR xong mới chấm bài.`;
+        onUpdateSubmissions((prev) =>
+          prev.map((s) =>
+            s.id === sub.id
+              ? {
+                  ...s,
+                  status: 'error',
+                  error: errText,
+                  stepMessage: undefined,
+                  queuePosition: undefined,
+                }
+              : s
+          )
+        );
+        setActiveSubId(null);
+        return false;
+      }
+    }
+
+    // =========================================================================
+    // BƯỚC 2: CHẤM BÀI BẰNG AI (SỬ DỤNG BẢN ĐÃ QUA OCR VÀ VERIFY)
+    // =========================================================================
+    const gradeBaseMessage = isTriple
+      ? 'Bước 2/2: Đang chấm đồng thời 3 Model (Gemini, Claude, GPT-4o)...'
+      : passes === 3
+      ? `Bước 2/2: Đang chấm 3 lần bằng ${activeModelName} (Barem + Soi lỗi + Sư phạm)...`
+      : `Bước 2/2: Đang chấm nhanh bằng ${activeModelName}...`;
+
+    const MAX_GRADE_RETRIES = 3;
     let lastError: any = null;
 
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    for (let attempt = 1; attempt <= MAX_GRADE_RETRIES; attempt++) {
       onUpdateSubmissions((prev) =>
         prev.map((s) =>
           s.id === sub.id
@@ -201,8 +321,8 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                 status: 'grading',
                 stepMessage:
                   attempt > 1
-                    ? `[Thử lại ${attempt}/${MAX_RETRIES}] ${baseMessage}`
-                    : baseMessage,
+                    ? `[Thử lại Chấm ${attempt}/${MAX_GRADE_RETRIES}] ${gradeBaseMessage}`
+                    : gradeBaseMessage,
                 error: undefined,
               }
             : s
@@ -221,7 +341,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
             ...(settings.alibabacloudApiKey ? { 'x-alibabacloud-api-key': settings.alibabacloudApiKey } : {}),
           },
           body: JSON.stringify({
-            submission: sub,
+            submission: currentSub,
             rubric,
             settings,
           }),
@@ -240,8 +360,8 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                   ...s,
                   status: 'done',
                   gradingResult: data.gradingResult,
-                  extractedText: data.extractedText || s.extractedText,
-                  ocrComparison: data.ocrComparison || s.ocrComparison,
+                  extractedText: data.extractedText || currentSub.extractedText,
+                  ocrComparison: data.ocrComparison || currentSub.ocrComparison,
                   stepMessage: undefined,
                   queuePosition: undefined,
                   error: undefined,
@@ -253,22 +373,21 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
         return true;
       } catch (err: any) {
         lastError = err;
-        console.warn(`[Chấm bài ${sub.studentName}] Lần ${attempt}/${MAX_RETRIES} gặp lỗi:`, err.message || err);
+        console.warn(`[Chấm bài ${sub.studentName}] Lần ${attempt}/${MAX_GRADE_RETRIES} gặp lỗi:`, err.message || err);
 
-        // Nếu chưa đến 3 lần lỗi thì chuẩn bị thử lại
-        if (attempt < MAX_RETRIES) {
+        if (attempt < MAX_GRADE_RETRIES) {
           const delayMs = attempt * 1500;
           onUpdateSubmissions((prev) =>
             prev.map((s) =>
               s.id === sub.id
                 ? {
                     ...s,
-                    stepMessage: `Gặp sự cố (${err.message || 'Lỗi kết nối'}). Đang thử lại (Lần ${attempt + 1}/${MAX_RETRIES})...`,
+                    stepMessage: `Gặp sự cố chấm bài (${err.message || 'Lỗi kết nối'}). Đang thử lại (${attempt + 1}/${MAX_GRADE_RETRIES})...`,
                   }
                 : s
             )
           );
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          await new Promise((r) => setTimeout(r, delayMs));
         }
       }
     }
@@ -294,11 +413,12 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
     return false;
   };
 
-  // Run OCR with 3 models on a single submission without immediate grading (Tự động thử lại tối đa 3 lần)
+  // Run OCR with selected passes on a single submission without immediate grading (Tự động thử lại tối đa 3 lần)
   const runOcrOnly = async (sub: StudentSubmission) => {
     setActiveSubId(sub.id);
     const MAX_RETRIES = 3;
     let lastError: any = null;
+    const ocrPasses = settings.ocrPasses ?? 3;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       onUpdateSubmissions((prev) =>
@@ -310,7 +430,9 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                 stepMessage:
                   attempt > 1
                     ? `[Thử lại ${attempt}/${MAX_RETRIES}] Đang đọc công thức bằng AI OCR...`
-                    : 'Đang đọc công thức bằng 3 Model AI (Gemini, Claude, GPT-4o)...',
+                    : ocrPasses === 3
+                    ? 'Đang đọc ảnh OCR 3 lần & verify đối chiếu nét mực...'
+                    : 'Đang đọc công thức bằng AI OCR (1 lần)...',
                 error: undefined,
               }
             : s
@@ -331,6 +453,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
           body: JSON.stringify({
             submission: sub,
             settings,
+            ocrPasses,
           }),
         });
 
@@ -561,10 +684,11 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
   const mode = settings.gradingMode || 'triple_pass';
   const isTripleMode = mode === 'triple_consensus';
   const activeProvider = settings.provider || 'openrouter';
-  const activePasses = settings.modelPasses?.[activeProvider] ?? (mode === 'claude_triple_pass' || mode === 'triple_pass' ? 3 : 1);
+  const activePasses = settings.gradingPasses ?? (settings.modelPasses?.[activeProvider] ?? 1);
+  const activeOcrPasses = settings.ocrPasses ?? 3;
   const activeModelTitle =
     activeProvider === 'openrouter'
-      ? `Qwen (${settings.openrouterModel || '3.8'})`
+      ? `Qwen (${settings.openrouterModel || '3.8 27B'})`
       : activeProvider === 'alibabacloud'
       ? `Qwen (${settings.alibabacloudModel || 'Alibaba'})`
       : activeProvider === 'claude'
@@ -601,15 +725,18 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
               Nạp Danh Sách Bài Làm & Quản Lý Chấm Bài
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
-              Hỗ trợ nạp cùng lúc nhiều bài làm (.docx hoặc ảnh viết tay). Hệ thống dùng{' '}
-              <strong style={{ color: isTripleMode ? '#818cf8' : activePasses === 3 ? '#f59e0b' : '#38bdf8' }}>
-                {isTripleMode
-                  ? 'Bộ 3 Model AI (Gemini + Claude + GPT-4o) đối chiếu kết quả'
-                  : activePasses === 3
-                  ? `Chế độ Chấm 3 Lần Bằng ${activeModelTitle} (Barem + Soi lỗi + Sư phạm & Hội đồng tổng hợp)`
-                  : `Mô hình ${activeModelTitle} (Chấm 1 lần nhanh)`}
+              Quy trình chuẩn 2 bước: Bắt buộc{' '}
+              <strong style={{ color: '#38bdf8' }}>
+                Đọc OCR ảnh {activeOcrPasses === 1 ? '1 Lần nhanh' : '3 Lần & Verify đối chiếu'}
               </strong>{' '}
-              và hàng đợi tuần tự để chấm điểm chính xác nhất.
+              ➔ Chuyển bài đã số hóa sang{' '}
+              <strong style={{ color: isTripleMode ? '#818cf8' : activePasses === 3 ? '#fbbf24' : '#34d399' }}>
+                {isTripleMode
+                  ? 'Chấm đối chiếu 3 Model AI (Gemini + Claude + GPT-4o)'
+                  : activePasses === 3
+                  ? `Chấm 3 Lần Triple-Pass bằng ${activeModelTitle} (Barem + Soi lỗi + Sư phạm)`
+                  : `Chấm 1 Lần Nhanh bằng ${activeModelTitle}`}
+              </strong>.
             </p>
           </div>
 
@@ -640,13 +767,11 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 {/* AI Mode badge */}
                 <span
-                  className={`badge ${isTripleMode ? 'badge-indigo' : activePasses === 3 ? 'badge-amber' : 'badge-emerald'}`}
+                  className="badge badge-indigo"
                   style={{ fontSize: '0.8rem', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
-                  <Sparkles size={13} color={isTripleMode ? '#818cf8' : activePasses === 3 ? '#fbbf24' : '#34d399'} />
-                  {isTripleMode
-                    ? '3 Model Đối Chiếu (Gemini + Claude + GPT-4o)'
-                    : `${activeModelTitle} • ${activePasses === 3 ? 'Chấm 3 Lần (⭐)' : 'Chấm 1 Lần'}`}
+                  <Sparkles size={13} color="#818cf8" />
+                  {`Quy trình 2 bước: OCR ${activeOcrPasses === 1 ? '1 Lần' : '3 Lần (⭐)'} ➔ Chấm ${activePasses === 1 ? '1 Lần' : '3 Lần (⭐)'}`}
                 </span>
 
                 {/* Start Queue button */}
@@ -1104,7 +1229,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                         onClick={() => runOcrOnly(sub)}
                         disabled={sub.status === 'grading' || sub.status === 'ocr' || sub.status === 'queued' || queueStatus === 'running'}
                         className="btn btn-secondary"
-                        title="Đọc ảnh viết tay và chuyển thành công thức LaTeX bằng cả 3 model AI trước"
+                        title={`Đọc ảnh viết tay (${activeOcrPasses === 1 ? '1 lần nhanh' : '3 lần & đối chiếu verify'}) trước khi chấm`}
                         style={{
                           padding: '6px 10px',
                           fontSize: '0.82rem',
@@ -1114,7 +1239,7 @@ export const SubmissionUploader: React.FC<SubmissionUploaderProps> = ({
                         }}
                       >
                         <FileCode size={13} color="#06b6d4" />
-                        {sub.status === 'ocr' ? 'Đang đọc...' : 'OCR 3 Model'}
+                        {sub.status === 'ocr' ? 'Đang đọc...' : (activeOcrPasses === 1 ? 'Đọc OCR 1 Lần' : 'Đọc OCR 3 Lần')}
                       </button>
                     )}
 

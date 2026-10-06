@@ -4,7 +4,6 @@ import {
   SUPPORTED_GEMINI_MODELS,
   SUPPORTED_OPENAI_MODELS,
   SUPPORTED_OPENROUTER_MODELS,
-  SUPPORTED_ALIBABACLOUD_MODELS,
   parseModelEnvList,
   filterModels,
 } from '@/utils/modelConfig';
@@ -57,16 +56,6 @@ export async function GET() {
     ];
     const openrouterModels = filterModels(SUPPORTED_OPENROUTER_MODELS, openrouterVisible, openrouterHidden);
 
-    // 6. Alibaba Cloud visibility
-    const alibabaVisible = parseModelEnvList(
-      process.env.ALIBABACLOUD_VISIBLE_MODELS || process.env.NEXT_PUBLIC_ALIBABACLOUD_VISIBLE_MODELS
-    ) || globalVisible;
-    const alibabaHidden = [
-      ...(parseModelEnvList(process.env.ALIBABACLOUD_HIDDEN_MODELS || process.env.NEXT_PUBLIC_ALIBABACLOUD_HIDDEN_MODELS) || []),
-      ...(globalHidden || []),
-    ];
-    const alibabaModels = filterModels(SUPPORTED_ALIBABACLOUD_MODELS, alibabaVisible, alibabaHidden);
-
     return NextResponse.json({
       success: true,
       claude: {
@@ -88,17 +77,9 @@ export async function GET() {
       },
       openrouter: {
         models: openrouterModels,
-        defaultModel: process.env.OPENROUTER_MODEL || 'qwen/qwen3.8-flash',
+        defaultModel: process.env.OPENROUTER_MODEL || 'qwen/qwen3.8-27b',
         baseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
         hasServerKey: Boolean(process.env.OPENROUTER_API_KEY),
-      },
-      alibabacloud: {
-        models: alibabaModels,
-        defaultModel: process.env.ALIBABACLOUD_MODEL || 'qwen-plus-character',
-        baseUrl:
-          process.env.ALIBABACLOUD_BASE_URL ||
-          'https://ws-oxwvfx79avt7ebq3.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1',
-        hasServerKey: Boolean(process.env.ALIBABACLOUD_API_KEY),
       },
     });
   } catch (error: any) {

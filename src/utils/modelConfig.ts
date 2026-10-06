@@ -117,25 +117,26 @@ export const SUPPORTED_OPENAI_MODELS: ModelOption[] = [
 
 export const SUPPORTED_OPENROUTER_MODELS: ModelOption[] = [
   {
+    id: 'qwen/qwen3.8-27b',
+    name: 'Qwen 3.8 27B',
+    description: 'Mặc định chấm bài & OCR đọc ảnh viết tay, suy luận toán học đỉnh cao (Reasoning CoT)',
+    recommended: true,
+    badge: 'Mặc định Chấm bài & OCR ⭐',
+    provider: 'openrouter',
+  },
+  {
+    id: 'qwen/qwen3-vl-235b-a22b-instruct',
+    name: 'Qwen 3 VL 235B (A22B Instruct)',
+    description: 'Mô hình thị giác đỉnh cao 235B (MoE 22B active) chuyên đọc ảnh toán học & chữ viết tay',
+    recommended: true,
+    badge: 'Chuyên gia Đọc ảnh OCR ⭐',
+    provider: 'openrouter',
+  },
+  {
     id: 'qwen/qwen3.8-flash',
     name: 'Qwen 3.8 Flash',
-    description: 'Khuyên dùng - Siêu nhanh, hỗ trợ suy luận reasoning tokens chuyên sâu',
-    recommended: true,
-    badge: 'Mới nhất ⭐',
-    provider: 'openrouter',
-  },
-  {
-    id: 'qwen/qwen3.8-27b:free',
-    name: 'Qwen 3.8 27B (Free)',
-    description: 'Miễn phí, Chain-of-Thought suy luận toán học xuất sắc',
-    badge: 'Free',
-    provider: 'openrouter',
-  },
-  {
-    id: 'qwen/qwen-2.5-vl-72b-instruct:free',
-    name: 'Qwen 2.5 VL 72B (Free)',
-    description: 'Đa phương thức đọc ảnh bài viết tay miễn phí',
-    badge: 'Free Vision',
+    description: 'Đọc ảnh OCR & giải toán siêu nhanh, hỗ trợ reasoning tokens chuyên sâu',
+    badge: 'OCR & Suy Luận Siêu Nhanh ⚡',
     provider: 'openrouter',
   },
   {
@@ -161,41 +162,6 @@ export const SUPPORTED_OPENROUTER_MODELS: ModelOption[] = [
     name: 'Qwen 2.5 Coder 32B',
     description: 'Tư duy logic cấu trúc chặt chẽ',
     provider: 'openrouter',
-  },
-];
-
-export const SUPPORTED_ALIBABACLOUD_MODELS: ModelOption[] = [
-  {
-    id: 'qwen-plus-character',
-    name: 'Qwen Plus Character',
-    description: 'Khuyên dùng - Chuẩn mực sư phạm & đọc công thức toán',
-    recommended: true,
-    badge: 'Khuyên dùng',
-    provider: 'alibabacloud',
-  },
-  {
-    id: 'qwen-max',
-    name: 'Qwen Max',
-    description: 'Mô hình lớn nhất, lý luận sâu sắc nhất',
-    provider: 'alibabacloud',
-  },
-  {
-    id: 'qwen-vl-max',
-    name: 'Qwen VL Max',
-    description: 'Thị giác đa phương thức đọc ảnh viết tay',
-    provider: 'alibabacloud',
-  },
-  {
-    id: 'qwen-plus',
-    name: 'Qwen Plus',
-    description: 'Cân bằng tốc độ và độ chính xác',
-    provider: 'alibabacloud',
-  },
-  {
-    id: 'qwen-turbo',
-    name: 'Qwen Turbo',
-    description: 'Tốc độ cực nhanh, tiết kiệm chi phí',
-    provider: 'alibabacloud',
   },
 ];
 

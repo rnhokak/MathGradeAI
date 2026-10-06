@@ -56,8 +56,10 @@ const DEFAULT_SETTINGS: TeacherSettings = {
   teacherName: '',
   strictness: 'strict',
   provider: 'openrouter',
-  gradingMode: 'triple_pass',
-  autoOcrBeforeGrading: false,
+  gradingMode: 'single_pass',
+  autoOcrBeforeGrading: true,
+  ocrPasses: 3, // Bắt buộc OCR 3 lần & verify kết quả mặc định
+  gradingPasses: 1, // Số lượt chấm bài bằng AI: 1 lần mặc định
   queueDelayMs: 2000,
   maxRegradeRetries: 2,
   consensusTolerance: 0.25,
@@ -70,7 +72,7 @@ const DEFAULT_SETTINGS: TeacherSettings = {
   openaiModel: 'gpt-4o',
   openaiBaseUrl: 'https://api.openai.com/v1',
   openrouterApiKey: '',
-  openrouterModel: 'qwen/qwen3.8-flash',
+  openrouterModel: 'qwen/qwen3.8-27b',
   openrouterBaseUrl: 'https://openrouter.ai/api/v1',
   openrouterReasoning: true,
   alibabacloudApiKey: '',
@@ -78,11 +80,11 @@ const DEFAULT_SETTINGS: TeacherSettings = {
   alibabacloudBaseUrl: 'https://ws-oxwvfx79avt7ebq3.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1',
   model: 'gemini-3.8-flash',
   modelPasses: {
-    gemini: 3,
-    claude: 3,
-    openai: 3,
-    openrouter: 3,
-    alibabacloud: 3,
+    gemini: 1,
+    claude: 1,
+    openai: 1,
+    openrouter: 1,
+    alibabacloud: 1,
   },
 };
 
@@ -123,15 +125,27 @@ export default function Home() {
           claudeBaseUrl = 'https://apikey.pimath.id.vn/v1';
         }
 
-        // Mặc định luôn là triple_pass (Qwen OpenRouter) nếu người dùng chưa chủ động đổi sang chế độ khác
+        // Mặc định luôn là single_pass (Chấm 1 lần nhanh) nếu người dùng chưa chủ động đổi sang chế độ khác
         let gradingMode = parsed.gradingMode;
         if (!gradingMode || !parsed._gradingModeExplicitlySet) {
-          gradingMode = 'triple_pass';
+          gradingMode = 'single_pass';
         }
 
         let openrouterModel = parsed.openrouterModel || DEFAULT_SETTINGS.openrouterModel;
-        if (openrouterModel === 'qwen/qwen3.8-27b:free') {
-          openrouterModel = 'qwen/qwen3.8-flash';
+        if (!openrouterModel || openrouterModel.includes(':free')) {
+          openrouterModel = 'qwen/qwen3.8-27b';
+        }
+
+        let ocrPasses = parsed.ocrPasses;
+        if (ocrPasses !== 1 && ocrPasses !== 3) {
+          ocrPasses = 3;
+        }
+
+        let gradingPasses = parsed.gradingPasses;
+        if (!parsed._gradingPassesExplicitlySet) {
+          gradingPasses = 1;
+        } else if (gradingPasses !== 1 && gradingPasses !== 3) {
+          gradingPasses = 1;
         }
 
         setSettings({
@@ -139,11 +153,13 @@ export default function Home() {
           ...parsed,
           gradingMode,
           _gradingModeExplicitlySet: parsed._gradingModeExplicitlySet,
-          autoOcrBeforeGrading: parsed.autoOcrBeforeGrading ?? false,
+          _gradingPassesExplicitlySet: parsed._gradingPassesExplicitlySet,
+          autoOcrBeforeGrading: true,
+          ocrPasses,
+          gradingPasses,
           queueDelayMs: parsed.queueDelayMs ?? 2000,
           maxRegradeRetries: parsed.maxRegradeRetries ?? 2,
-          consensusTolerance: parsed.consensusTolerance ?? 0.25,
-          provider: parsed.provider || 'openrouter',
+          provider: 'openrouter',
           geminiModel: parsed.geminiModel || parsed.model || DEFAULT_SETTINGS.geminiModel,
           claudeModel,
           openaiModel: parsed.openaiModel || DEFAULT_SETTINGS.openaiModel,
@@ -157,11 +173,11 @@ export default function Home() {
           alibabacloudBaseUrl: parsed.alibabacloudBaseUrl || DEFAULT_SETTINGS.alibabacloudBaseUrl,
           alibabacloudApiKey: parsed.alibabacloudApiKey || '',
           modelPasses: {
-            gemini: parsed.modelPasses?.gemini ?? 3,
-            claude: parsed.modelPasses?.claude ?? 3,
-            openai: parsed.modelPasses?.openai ?? 3,
-            openrouter: parsed.modelPasses?.openrouter ?? 3,
-            alibabacloud: parsed.modelPasses?.alibabacloud ?? 3,
+            gemini: parsed.modelPasses?.gemini ?? 1,
+            claude: parsed.modelPasses?.claude ?? 1,
+            openai: parsed.modelPasses?.openai ?? 1,
+            openrouter: parsed.modelPasses?.openrouter ?? 1,
+            alibabacloud: parsed.modelPasses?.alibabacloud ?? 1,
           },
         });
       }
@@ -175,6 +191,7 @@ export default function Home() {
     const toSave: TeacherSettings = {
       ...newSettings,
       _gradingModeExplicitlySet: true,
+      _gradingPassesExplicitlySet: true,
     };
     setSettings(toSave);
     try {

@@ -61,35 +61,6 @@ export const Header: React.FC<HeaderProps> = ({
               <h1 style={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
                 MathGrade <span className="text-gradient">AI</span>
               </h1>
-              {settings.gradingMode === 'triple_consensus' ? (
-                <span
-                  className="badge badge-indigo"
-                  style={{
-                    cursor: 'pointer',
-                    background: 'rgba(99, 102, 241, 0.25)',
-                    border: '1px solid #6366f1',
-                    color: '#e0e7ff',
-                  }}
-                  onClick={onOpenSettings}
-                  title="Chế độ chấm đa model đối chiếu (Gemini + Claude + GPT-4o)"
-                >
-                  <Layers size={11} /> Đa Model Đối Chiếu (3 AI)
-                </span>
-              ) : settings.provider === 'alibabacloud' ? (
-                <span
-                  className="badge"
-                  style={{
-                    cursor: 'pointer',
-                    background: 'rgba(234, 88, 12, 0.25)',
-                    color: '#ffedd5',
-                    border: '1px solid #ea580c',
-                  }}
-                  onClick={onOpenSettings}
-                  title={`Alibaba Cloud Model Studio: ${settings.alibabacloudModel || 'qwen-plus-character'} • ${(settings.modelPasses?.alibabacloud ?? 3) === 3 ? 'Chấm 3 lần (Triple-Pass)' : 'Chấm 1 lần'}`}
-                >
-                  <Cpu size={11} /> Qwen Alibaba {(settings.modelPasses?.alibabacloud ?? 3) === 3 ? '3 Lần (⭐)' : '1 Lần'}
-                </span>
-              ) : settings.provider === 'openrouter' ? (
                 <span
                   className="badge"
                   style={{
@@ -99,45 +70,10 @@ export const Header: React.FC<HeaderProps> = ({
                     border: '1px solid #a855f7',
                   }}
                   onClick={onOpenSettings}
-                  title={`OpenRouter: ${settings.openrouterModel || 'qwen/qwen3.8-flash'} • ${(settings.modelPasses?.openrouter ?? 3) === 3 ? 'Chấm 3 lần (Triple-Pass)' : 'Chấm 1 lần'}`}
+                  title={`OpenRouter: ${settings.openrouterModel || 'qwen/qwen3.8-27b'} • ${(settings.gradingPasses ?? 1) === 3 ? 'Chấm 3 lần (Tư duy sâu ⭐)' : 'Chấm 1 lần nhanh'}`}
                 >
-                  <Cpu size={11} /> Qwen OpenRouter {(settings.modelPasses?.openrouter ?? 3) === 3 ? '3 Lần (⭐)' : '1 Lần'}
+                  <Cpu size={11} /> Qwen OpenRouter {(settings.gradingPasses ?? 1) === 3 ? '3 Lần (Tư duy sâu ⭐)' : '1 Lần'}
                 </span>
-              ) : settings.provider === 'claude' ? (
-                <span
-                  className="badge badge-amber"
-                  style={{
-                    cursor: 'pointer',
-                    background: (settings.modelPasses?.claude ?? 3) === 3
-                      ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.25))'
-                      : 'rgba(245, 158, 11, 0.15)',
-                    border: '1px solid #f59e0b',
-                    color: '#fef3c7',
-                  }}
-                  onClick={onOpenSettings}
-                  title={`Claude API: ${settings.claudeModel || 'Claude Opus 5'} • ${(settings.modelPasses?.claude ?? 3) === 3 ? 'Chấm 3 lần (Triple-Pass)' : 'Chấm 1 lần'}`}
-                >
-                  <Bot size={11} /> Claude {(settings.modelPasses?.claude ?? 3) === 3 ? '3 Lần (⭐)' : '1 Lần'}
-                </span>
-              ) : settings.provider === 'openai' ? (
-                <span
-                  className="badge badge-emerald"
-                  style={{ cursor: 'pointer' }}
-                  onClick={onOpenSettings}
-                  title={`OpenAI: ${settings.openaiModel || 'GPT-4o'} • ${(settings.modelPasses?.openai ?? 3) === 3 ? 'Chấm 3 lần (Triple-Pass)' : 'Chấm 1 lần'}`}
-                >
-                  <Layers size={11} /> OpenAI {(settings.modelPasses?.openai ?? 3) === 3 ? '3 Lần (⭐)' : '1 Lần'}
-                </span>
-              ) : (
-                <span
-                  className="badge badge-indigo"
-                  style={{ cursor: 'pointer' }}
-                  onClick={onOpenSettings}
-                  title={`Gemini: ${settings.geminiModel || settings.model || 'Gemini 3.8'} • ${(settings.modelPasses?.gemini ?? 3) === 3 ? 'Chấm 3 lần (Triple-Pass)' : 'Chấm 1 lần'}`}
-                >
-                  <Sparkles size={11} /> Gemini {(settings.modelPasses?.gemini ?? 3) === 3 ? '3 Lần (⭐)' : '1 Lần'}
-                </span>
-              )}
             </div>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
               Chấm bài tự luận môn Toán & Lời phê sư phạm chuẩn mực

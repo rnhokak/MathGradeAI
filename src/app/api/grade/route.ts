@@ -173,6 +173,7 @@ export async function POST(req: NextRequest) {
 
     // Kiểm tra số lượt chấm cấu hình cho model này: 1 lần (dùng một lần) hay 3 lần (chấm 3 lần)
     const passes =
+      effectiveSettings?.gradingPasses ??
       effectiveSettings?.modelPasses?.[provider] ??
       (gradingMode === 'single' ? 1 : 3);
 

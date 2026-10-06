@@ -8,9 +8,11 @@ export async function POST(req: NextRequest) {
     const {
       submission,
       settings,
+      ocrPasses,
     }: {
       submission: StudentSubmission;
       settings: TeacherSettings;
+      ocrPasses?: 1 | 3;
     } = body;
 
     if (!submission) {
@@ -72,11 +74,14 @@ export async function POST(req: NextRequest) {
       alibabacloud: envAlibaba && envAlibaba !== clientAlibaba ? envAlibaba : undefined,
     };
 
+    const effectivePasses: 1 | 3 = ocrPasses ?? settings?.ocrPasses ?? 3;
+
     const { ocrComparison, consensusText } = await transcribeWithThreeModelsAndConsensus(
       submission,
       effectiveSettings,
       availableKeys,
-      backupKeys
+      backupKeys,
+      effectivePasses
     );
 
     return NextResponse.json({

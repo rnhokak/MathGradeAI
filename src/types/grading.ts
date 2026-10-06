@@ -118,7 +118,7 @@ export interface StudentSubmission {
 }
 
 export type AIProvider = 'gemini' | 'claude' | 'openai' | 'openrouter' | 'alibabacloud';
-export type GradingMode = 'single' | 'triple_consensus' | 'claude_triple_pass' | 'triple_pass';
+export type GradingMode = 'single' | 'single_pass' | 'triple_consensus' | 'claude_triple_pass' | 'triple_pass';
 
 export interface ModelPassSettings {
   gemini?: 1 | 3;
@@ -135,7 +135,12 @@ export interface TeacherSettings {
   provider: AIProvider;
   gradingMode?: GradingMode; // 'single' (theo model đã chọn), 'triple_consensus' (đa model) hoặc 'claude_triple_pass'
   _gradingModeExplicitlySet?: boolean;
-  autoOcrBeforeGrading?: boolean; // Tự động đọc và đối chiếu 3 model trước khi chấm (dùng khi ở chế độ đối chiếu)
+  _gradingPassesExplicitlySet?: boolean;
+  autoOcrBeforeGrading?: boolean; // Tương thích ngược: luôn true trong quy trình 2 bước
+
+  // Cấu hình quy trình 2 bước (Bắt buộc tách Đọc OCR trước -> Chấm bài sau)
+  ocrPasses?: 1 | 3; // Số lượt đọc OCR ảnh: 3 (Đọc 3 lần & Verify lại kết quả - Mặc định) | 1 (Đọc 1 lần nhanh)
+  gradingPasses?: 1 | 3; // Số lượt chấm bài AI: 1 (Chấm 1 lần nhanh - Mặc định) | 3 (Chấm 3 lần Triple-Pass)
   
   // Cài đặt số lượt chấm riêng biệt cho mỗi model: 1 lần (dùng một lần) hoặc 3 lần (chấm 3 lần)
   modelPasses?: ModelPassSettings;
@@ -159,7 +164,7 @@ export interface TeacherSettings {
   openaiModel: string;
   openaiBaseUrl?: string;
 
-  // OpenRouter (Qwen: qwen/qwen3.8-27b:free, qwen/qwen-2.5-vl-72b-instruct:free,...)
+  // OpenRouter (Qwen: qwen/qwen3.8-27b, qwen/qwen3-vl-235b-a22b-instruct, qwen/qwen3.8-flash,...)
   openrouterApiKey?: string;
   openrouterModel?: string;
   openrouterBaseUrl?: string;

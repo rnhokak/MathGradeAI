@@ -513,7 +513,7 @@ export async function parseRubricWithOpenRouter(
   tables: string[][][],
   fileName?: string,
   apiKey?: string,
-  modelName: string = 'qwen/qwen3.8-flash',
+  modelName: string = 'qwen/qwen3.8-27b',
   baseUrl: string = 'https://openrouter.ai/api/v1'
 ): Promise<RubricData> {
   if (!apiKey) {
